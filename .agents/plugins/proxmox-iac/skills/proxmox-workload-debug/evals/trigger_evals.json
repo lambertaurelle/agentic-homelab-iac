@@ -1,0 +1,101 @@
+{
+  "skill": "proxmox-workload-debug",
+  "queries": [
+    {
+      "quadrant": "Q1_direct",
+      "query": "My Plex container is crashing with exit code 137, please debug it.",
+      "expect": "trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q1_direct",
+      "query": "Show me the logs of CT 601 monitoring container and see why Uptime Kuma is down.",
+      "expect": "trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q1_direct",
+      "query": "Debug container 501 AdGuard because DNS requests are timing out.",
+      "expect": "trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q1_direct",
+      "query": "Inspect systemd journal and Docker logs for the failing Immich stack.",
+      "expect": "trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q2_colloquial",
+      "query": "Why is my seedbox container stuck in a restart loop?",
+      "expect": "trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q2_colloquial",
+      "query": "The web interface on port 8080 isn't responding, can you check what is wrong?",
+      "expect": "trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q2_colloquial",
+      "query": "One of my LXC containers stopped suddenly, find out why it exited.",
+      "expect": "trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q2_colloquial",
+      "query": "Troubleshoot container networking and check why it cannot reach the internet.",
+      "expect": "trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q3_near_miss",
+      "query": "Check cluster health and verify if all nodes are online.",
+      "expect": "no-trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q3_near_miss",
+      "query": "Bootstrap the homelab infrastructure from scratch.",
+      "expect": "no-trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q3_near_miss",
+      "query": "Scaffold a new Immich photo stack on my cluster.",
+      "expect": "no-trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q3_near_miss",
+      "query": "Perform a rolling reboot of the cluster nodes.",
+      "expect": "no-trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q4_sibling",
+      "query": "Run the nightly package update on all nodes.",
+      "expect": "no-trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q4_sibling",
+      "query": "Backup all containers to my NAS backup share.",
+      "expect": "no-trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q4_sibling",
+      "query": "Verify Proxmox quorum status and storage pools.",
+      "expect": "no-trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q4_sibling",
+      "query": "How do I write a new agent skill with skill-creator?",
+      "expect": "no-trigger",
+      "split": "val"
+    }
+  ]
+}

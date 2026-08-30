@@ -1,0 +1,101 @@
+{
+  "skill": "proxmox-bootstrap",
+  "queries": [
+    {
+      "quadrant": "Q1_direct",
+      "query": "Bootstrap the homelab infrastructure from scratch.",
+      "expect": "trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q1_direct",
+      "query": "Initialize the homelab cluster and generate the baseline terraform tfvars.",
+      "expect": "trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q1_direct",
+      "query": "Setup OpenTofu baseline infrastructure and core containers on my new node.",
+      "expect": "trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q1_direct",
+      "query": "Provision AdGuard, Cloudflared and Uptime Kuma core baseline.",
+      "expect": "trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q2_colloquial",
+      "query": "I just finished setting up Proxmox on my server and spawned CT 900. Please bootstrap my homelab cluster.",
+      "expect": "trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q2_colloquial",
+      "query": "Run Day 0 cluster provisioning and deploy the core services.",
+      "expect": "trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q2_colloquial",
+      "query": "Can you run the cluster onboarding script and initialize OpenTofu?",
+      "expect": "trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q2_colloquial",
+      "query": "Execute homelab initial setup and configure secrets.",
+      "expect": "trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q3_near_miss",
+      "query": "Can you check if my cluster quorum is healthy?",
+      "expect": "no-trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q3_near_miss",
+      "query": "Audit storage pools and check if there is any OpenTofu drift.",
+      "expect": "no-trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q3_near_miss",
+      "query": "My Plex container is crashing with exit code 137, please debug it.",
+      "expect": "no-trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q3_near_miss",
+      "query": "Perform a rolling reboot of the cluster nodes.",
+      "expect": "no-trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q4_sibling",
+      "query": "Scaffold a new Immich photo stack on my cluster.",
+      "expect": "no-trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q4_sibling",
+      "query": "Run the nightly package update on all nodes.",
+      "expect": "no-trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q4_sibling",
+      "query": "Backup all containers to my NAS backup share.",
+      "expect": "no-trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q4_sibling",
+      "query": "How do I write a new agent skill with skill-creator?",
+      "expect": "no-trigger",
+      "split": "val"
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+# ==============================================================================
+# Homelab CI Validation & Security Gate Workflow
+# Path: .github/workflows/ci-cd.yml
+# ==============================================================================
+# Validates OpenTofu HCL, shell script hygiene, and scans for secret leaks.
+# ==============================================================================
+
+name: "CI Validation & Security Gate"
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ci-validation:
+    name: "Linting, Validation & Security"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up OpenTofu
+        uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: "1.8.2"
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends shellcheck jq curl
+
+      - name: Lint Shell Scripts (ShellCheck)
+        run: |
+          echo "[*] Linting scripts/*.sh with ShellCheck..."
+          shellcheck scripts/*.sh
+
+      - name: OpenTofu Format Check
+        run: |
+          echo "[*] Checking OpenTofu HCL formatting..."
+          cd tofu
+          tofu fmt -check -diff
+
+      - name: OpenTofu Schema Validation
+        run: |
+          echo "[*] Validating OpenTofu syntax and provider schema..."
+          cd tofu
+          tofu init -backend=false
+          tofu validate
+
+      - name: Validate Agent Skills
+        run: |
+          echo "[*] Validating Agent Skills with meta-skills validator..."
+          python3 .agents/plugins/meta-skills/skills/skill-creator/scripts/validate_skill.py --audit-workspace .agents/plugins/proxmox-iac/skills --strict
+
+      - name: Scan for Secret Leaks (Gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

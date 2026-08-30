@@ -1,0 +1,56 @@
+# ==============================================================================
+# Trivy Security Scanner Configuration - Homelab IaC
+# ==============================================================================
+# Centralized configuration for vulnerability detection, IaC misconfigurations,
+# and secret scanning across OpenTofu HCL, Docker Compose, and automation scripts.
+#
+# References:
+# - Trivy Configuration: https://aquasecurity.github.io/trivy/latest/docs/references/configuration/config-file/
+# - Homelab Security Register: docs/SECURITY_EXCEPTIONS.md
+# ==============================================================================
+
+# Scanners enabled for vulnerability, IaC misconfiguration, and secret scanning
+scan:
+  scanners:
+    - vuln
+    - misconfig
+    - secret
+  skip-dirs:
+    - .terraform
+    - tofu/.terraform
+    - .git
+
+# Top-level scanner declaration for multi-version Trivy compatibility
+scanners:
+  - vuln
+  - misconfig
+  - secret
+
+# Severity threshold: block on HIGH and CRITICAL findings
+severity:
+  - HIGH
+  - CRITICAL
+
+# Suppression file for documented risk acceptances
+ignorefile: .trivyignore
+
+# Output formatting and exit behavior
+format: table
+exit-code: 1
+
+# Directories and paths excluded from scanning
+skip-dirs:
+  - .terraform
+  - tofu/.terraform
+  - .git
+
+# Misconfiguration scanning framework support
+misconfiguration:
+  scanners:
+    - terraform
+    - dockerfile
+    - yaml
+
+# Secret detection settings
+secret:
+  enable: true

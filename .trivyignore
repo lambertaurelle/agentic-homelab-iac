@@ -1,0 +1,16 @@
+# ==============================================================================
+# Trivy Security Scanner Suppression Register (.trivyignore)
+# Auto-generated from .security-exceptions.yaml - DO NOT EDIT MANUALLY
+# ==============================================================================
+# All suppressions in this file comply with the centralized security exceptions
+# registry defined in .security-exceptions.yaml.
+# ==============================================================================
+
+# EXC-004: Healthchecks handled externally via Uptime Kuma (CT 601) [Target: stacks/* | Exp: 2027-01-01]
+AVD-DS-0002
+
+# EXC-005: TeamSpeak direct UDP 9987 port exposure [Target: stacks/teamspeak/docker-compose.yml | Exp: 2027-01-01]
+AVD-DS-0011
+
+# EXC-006: Gluetun root execution for WireGuard TUN interface [Target: stacks/seedbox/docker-compose.yml | Exp: 2027-01-01]
+AVD-DS-0001

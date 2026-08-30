@@ -1,0 +1,90 @@
+# ==============================================================================
+# Pre-Commit Hook Configuration - Homelab IaC
+# ==============================================================================
+# Automates static analysis, security validation, and code formatting on commit.
+#
+# Usage:
+#   pre-commit install
+#   pre-commit run --all-files
+#
+# Documentation:
+#   https://pre-commit.com/
+# ==============================================================================
+
+default_stages: [commit]
+fail_fast: false
+minimum_pre_commit_version: "2.18.0"
+
+repos:
+  # ----------------------------------------------------------------------------
+  # 1. Standard File Hygiene & Sanity Checks
+  # ----------------------------------------------------------------------------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+        name: Trim Trailing Whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+        name: Fix Missing End-of-File Newlines
+      - id: check-yaml
+        name: Validate YAML Syntax
+        args: [--unsafe]
+      - id: check-json
+        name: Validate JSON Syntax
+      - id: check-added-large-files
+        name: Prevent Large File Commits
+        args: ['--maxkb=2048']
+      - id: check-merge-conflict
+        name: Check for Merge Conflict Markers
+      - id: detect-private-key
+        name: Detect Accidentally Committed Private Keys
+
+  # ----------------------------------------------------------------------------
+  # 2. Secret Scanning (Gitleaks)
+  # ----------------------------------------------------------------------------
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks
+        name: Gitleaks Secret Detection
+        description: Scans staged commits for API keys, passwords, and sensitive tokens
+
+  # ----------------------------------------------------------------------------
+  # 3. Shell Script Linting & Static Analysis (ShellCheck)
+  # ----------------------------------------------------------------------------
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        name: ShellCheck Script Linter
+        description: Static analysis for shell automation scripts in scripts/
+        files: ^scripts/.*\.sh$
+        args: ["-x"]
+
+  # ----------------------------------------------------------------------------
+  # 4. OpenTofu HCL Formatting & Configuration Validation
+  # ----------------------------------------------------------------------------
+  - repo: https://github.com/tofuutils/pre-commit-opentofu
+    rev: v2.1.0
+    hooks:
+      - id: tofu_fmt
+        name: OpenTofu HCL Format Check
+        files: ^tofu/.*\.tf$
+      - id: tofu_validate
+        name: OpenTofu Configuration Validation
+        files: ^tofu/.*\.tf$
+
+  # ----------------------------------------------------------------------------
+  # 5. Infrastructure as Code Security Scanner (Checkov)
+  # ----------------------------------------------------------------------------
+  - repo: https://github.com/bridgecrewio/checkov.git
+    rev: 3.2.228
+    hooks:
+      - id: checkov
+        name: Checkov IaC Security Analysis
+        description: Scans OpenTofu HCL and Docker Compose for misconfigurations
+        args:
+          - --config-file
+          - .checkov.yaml
+        verbose: true

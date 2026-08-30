@@ -1,0 +1,53 @@
+# ==============================================================================
+# Centralized Risk Acceptance & Security Exceptions Registry
+# Single Actionable Source of Truth for all IaC & Vulnerability Suppressions
+# ==============================================================================
+version: "1.0"
+exceptions:
+  - id: EXC-001
+    tool: checkov
+    rule: CKV_DOCKER_2
+    target: "stacks/*"
+    severity: LOW
+    reason: "Healthchecks handled externally via Uptime Kuma (CT 601)"
+    review_by: "2027-01-01"
+
+  - id: EXC-002
+    tool: checkov
+    rule: CKV_DOCKER_11
+    target: "stacks/teamspeak/docker-compose.yml"
+    severity: HIGH
+    reason: "TeamSpeak UDP 9987 / TCP 30033 requires direct WAN forwarding"
+    review_by: "2027-01-01"
+
+  - id: EXC-003
+    tool: checkov
+    rule: CKV_DOCKER_8
+    target: "stacks/seedbox/docker-compose.yml"
+    severity: HIGH
+    reason: "Gluetun requires initial root for WireGuard network namespace initialization"
+    review_by: "2027-01-01"
+
+  - id: EXC-004
+    tool: trivy
+    rule: AVD-DS-0002
+    target: "stacks/*"
+    severity: LOW
+    reason: "Healthchecks handled externally via Uptime Kuma (CT 601)"
+    review_by: "2027-01-01"
+
+  - id: EXC-005
+    tool: trivy
+    rule: AVD-DS-0011
+    target: "stacks/teamspeak/docker-compose.yml"
+    severity: HIGH
+    reason: "TeamSpeak direct UDP 9987 port exposure"
+    review_by: "2027-01-01"
+
+  - id: EXC-006
+    tool: trivy
+    rule: AVD-DS-0001
+    target: "stacks/seedbox/docker-compose.yml"
+    severity: HIGH
+    reason: "Gluetun root execution for WireGuard TUN interface"
+    review_by: "2027-01-01"

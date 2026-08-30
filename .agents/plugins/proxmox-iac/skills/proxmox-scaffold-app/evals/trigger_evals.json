@@ -1,0 +1,101 @@
+{
+  "skill": "proxmox-scaffold-app",
+  "queries": [
+    {
+      "quadrant": "Q1_direct",
+      "query": "Scaffold a new Immich photo stack on my cluster.",
+      "expect": "trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q1_direct",
+      "query": "Deploy a new third-party container stack for Vaultwarden.",
+      "expect": "trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q1_direct",
+      "query": "Onboard my custom GitHub repo myorg/api with instant continuous deployment.",
+      "expect": "trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q1_direct",
+      "query": "Create an LXC container and Docker Compose boilerplate for Paperless-ngx.",
+      "expect": "trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q2_colloquial",
+      "query": "I want to add a new microservice to my homelab.",
+      "expect": "trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q2_colloquial",
+      "query": "Can we provision a dedicated container for Plex media server with GPU passthrough?",
+      "expect": "trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q2_colloquial",
+      "query": "Set up a new in-house app with Watchtower auto-reloading.",
+      "expect": "trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q2_colloquial",
+      "query": "Scaffold a bare-metal native Debian package service.",
+      "expect": "trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q3_near_miss",
+      "query": "Check cluster health and verify if all nodes are online.",
+      "expect": "no-trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q3_near_miss",
+      "query": "Bootstrap the homelab infrastructure from scratch.",
+      "expect": "no-trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q3_near_miss",
+      "query": "My Plex container is crashing with exit code 137, please debug it.",
+      "expect": "no-trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q3_near_miss",
+      "query": "Perform a rolling reboot of the cluster nodes.",
+      "expect": "no-trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q4_sibling",
+      "query": "Run the nightly package update on all nodes.",
+      "expect": "no-trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q4_sibling",
+      "query": "Backup all containers to my NAS backup share.",
+      "expect": "no-trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q4_sibling",
+      "query": "Show me the logs of CT 601 monitoring container.",
+      "expect": "no-trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q4_sibling",
+      "query": "How do I write a new agent skill with skill-creator?",
+      "expect": "no-trigger",
+      "split": "val"
+    }
+  ]
+}

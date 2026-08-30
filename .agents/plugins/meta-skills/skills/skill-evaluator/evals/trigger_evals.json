@@ -1,0 +1,108 @@
+{
+  "skill": "skill-evaluator",
+  "queries": [
+    {
+      "quadrant": "Q1_direct",
+      "query": "review this skill and tell me what to fix",
+      "expect": "trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q1_direct",
+      "query": "grade my SKILL.md, is it ready to ship",
+      "expect": "trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q1_direct",
+      "query": "score the pdf-extractor skill against the rubric",
+      "expect": "trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q1_direct",
+      "query": "audit this skill folder and give it a grade",
+      "expect": "trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q1_direct",
+      "query": "quality-check the skill in .agents/skills/db-log-parser",
+      "expect": "trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q2_colloquial",
+      "query": "lint this skill for best-practice problems",
+      "expect": "trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q2_colloquial",
+      "query": "why does my skill trigger on the wrong requests",
+      "expect": "trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q2_colloquial",
+      "query": "compare these two versions of my skill and tell me which is better",
+      "expect": "trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q2_colloquial",
+      "query": "is my skill's description good enough to make it fire",
+      "expect": "trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q3_near_miss",
+      "query": "review my python pull request",
+      "expect": "no-trigger",
+      "split": "train",
+      "note": "code review of app code, not a skill"
+    },
+    {
+      "quadrant": "Q3_near_miss",
+      "query": "grade this student essay",
+      "expect": "no-trigger",
+      "split": "val",
+      "note": "shares 'grade' keyword, unrelated domain"
+    },
+    {
+      "quadrant": "Q3_near_miss",
+      "query": "run the test suite and report failures",
+      "expect": "no-trigger",
+      "split": "train",
+      "note": "generic testing, not skill evaluation"
+    },
+    {
+      "quadrant": "Q3_near_miss",
+      "query": "explain how skills are loaded by the agent",
+      "expect": "no-trigger",
+      "split": "val",
+      "note": "conceptual question, no skill to evaluate"
+    },
+    {
+      "quadrant": "Q4_sibling_adjacent",
+      "query": "create a new skill for parsing db logs",
+      "expect": "no-trigger",
+      "split": "train",
+      "note": "authoring, that's skill-creator"
+    },
+    {
+      "quadrant": "Q4_sibling_adjacent",
+      "query": "write the SKILL.md frontmatter for me",
+      "expect": "no-trigger",
+      "split": "val",
+      "note": "authoring, not evaluation"
+    },
+    {
+      "quadrant": "Q4_sibling_adjacent",
+      "query": "install this skill into my project",
+      "expect": "no-trigger",
+      "split": "train",
+      "note": "installation, not evaluation"
+    }
+  ]
+}

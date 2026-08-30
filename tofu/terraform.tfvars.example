@@ -1,0 +1,326 @@
+# ==============================================================================
+# Proxmox VE Connection Details
+# ==============================================================================
+# Endpoint URL of your Proxmox VE cluster API
+proxmox_endpoint  = "https://pve.example.com:8006/"
+
+# API Token (Recommended: created in Datacenter -> Permissions -> API Tokens)
+# Format: USER@REALM!TOKENID=UUID-SECRET
+proxmox_api_token = "root@pam!opentofu=00000000-0000-0000-0000-000000000000"
+
+# Allow self-signed SSL certificates
+proxmox_insecure  = true
+
+# ==============================================================================
+# Cluster Nodes
+# ==============================================================================
+# Node 1: Cluster Lead & Utility Host - lightweight workloads & DevOps
+utility_node_name    = "proxmox"
+utility_node_address = "10.0.0.10"
+
+# Node 2: Primary Compute & Media Host
+compute_node_name    = "tuxmox"
+compute_node_address = "10.0.0.20"
+
+# Target node for declarative application containers (default: tuxmox, overridable to proxmox)
+app_node_name        = "tuxmox"
+
+# ==============================================================================
+# Plex LXC Configuration (Node: tuxmox)
+# ==============================================================================
+plex_ct_id            = 101
+plex_hostname         = "plex"
+plex_cores            = 4
+plex_memory           = 4096
+plex_swap             = 1024
+plex_disk_storage     = "local-lvm"
+plex_disk_size        = 50
+plex_template_file_id = "local:vztmpl/debian-12-standard_12.12-1_amd64.tar.zst"
+
+# Networking
+plex_network_bridge = "vmbr0"
+plex_mac_address    = "bc:24:11:00:01:01"
+plex_ipv4_address   = "dhcp"
+
+# SSH keys to inject for root access
+plex_ssh_public_keys = [
+  # "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... root@mgmt-devops",
+  # "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACA... root@proxmox",
+  # "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACA... root@tuxmox"
+]
+
+# LXC Privilege mode (false = privileged in OpenTofu bpg/proxmox)
+plex_unprivileged = false
+
+# ==============================================================================
+# Audiobookshelf LXC Configuration (Node: tuxmox)
+# ==============================================================================
+audiobookshelf_ct_id            = 102
+audiobookshelf_hostname         = "audiobookshelf"
+audiobookshelf_cores            = 2
+audiobookshelf_memory           = 2048
+audiobookshelf_swap             = 512
+audiobookshelf_disk_storage     = "local-lvm"
+audiobookshelf_disk_size        = 16
+audiobookshelf_template_file_id = "local:vztmpl/debian-12-standard_12.12-1_amd64.tar.zst"
+
+# Networking
+audiobookshelf_network_bridge = "vmbr0"
+audiobookshelf_mac_address    = "bc:24:11:00:01:02"
+audiobookshelf_ipv4_address   = "dhcp"
+
+# SSH keys to inject for root access
+audiobookshelf_ssh_public_keys = [
+  # "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... root@mgmt-devops",
+  # "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACA... root@proxmox",
+  # "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACA... root@tuxmox"
+]
+
+# LXC Privilege mode (false = privileged in OpenTofu bpg/proxmox)
+audiobookshelf_unprivileged = false
+
+# ==============================================================================
+# TeamSpeak LXC Configuration (Node: tuxmox)
+# ==============================================================================
+teamspeak_ct_id            = 401
+teamspeak_hostname         = "teamspeak"
+teamspeak_cores            = 2
+teamspeak_memory           = 2048
+teamspeak_swap             = 512
+teamspeak_disk_storage     = "local-lvm"
+teamspeak_disk_size        = 20
+teamspeak_template_file_id = "local:vztmpl/debian-12-standard_12.12-1_amd64.tar.zst"
+
+# Networking
+teamspeak_network_bridge = "vmbr0"
+teamspeak_mac_address    = "bc:24:11:00:04:01"
+teamspeak_ipv4_address   = "dhcp"
+
+# SSH keys to inject for root access
+teamspeak_ssh_public_keys = [
+  # "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... root@mgmt-devops",
+  # "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACA... root@proxmox",
+  # "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACA... root@tuxmox"
+]
+
+# LXC Privilege mode (false = privileged in OpenTofu bpg/proxmox)
+teamspeak_unprivileged = false
+
+# ==============================================================================
+# Seedbox Complete Stack LXC Configuration (Node: proxmox)
+# ==============================================================================
+seedbox_ct_id            = 201
+seedbox_hostname         = "seedbox"
+seedbox_cores            = 4
+seedbox_memory           = 4096
+seedbox_swap             = 1024
+seedbox_disk_storage     = "local-lvm"
+seedbox_disk_size        = 40
+seedbox_template_file_id = "local:vztmpl/debian-12-standard_12.12-1_amd64.tar.zst"
+
+# Networking
+seedbox_network_bridge = "vmbr0"
+seedbox_mac_address    = "bc:24:11:00:02:01"
+seedbox_ipv4_address   = "dhcp"
+
+# SSH keys to inject for root access
+seedbox_ssh_public_keys = [
+  # "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... root@mgmt-devops",
+  # "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACA... root@proxmox",
+  # "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACA... root@tuxmox"
+]
+
+# LXC Privilege mode (false = privileged in OpenTofu bpg/proxmox)
+seedbox_unprivileged = false
+
+# ==============================================================================
+# Immich LXC Configuration (Node: tuxmox)
+# ==============================================================================
+immich_ct_id            = 301
+immich_hostname         = "immich"
+immich_cores            = 6
+immich_memory           = 8192
+immich_swap             = 2048
+immich_disk_storage     = "local-lvm"
+immich_disk_size        = 50
+immich_template_file_id = "local:vztmpl/debian-12-standard_12.12-1_amd64.tar.zst"
+
+# Networking
+immich_network_bridge = "vmbr0"
+immich_mac_address    = "bc:24:11:00:03:01"
+immich_ipv4_address   = "dhcp"
+
+# SSH keys to inject for root access
+immich_ssh_public_keys = [
+  # "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... root@mgmt-devops",
+  # "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACA... root@proxmox",
+  # "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACA... root@tuxmox"
+]
+
+# LXC Privilege mode (false = privileged in OpenTofu bpg/proxmox)
+immich_unprivileged = false
+
+# ==============================================================================
+# Cloudflared Primary LXC Configuration (Node: proxmox)
+# ==============================================================================
+cloudflared_primary_ct_id            = 510
+cloudflared_primary_hostname         = "cloudflared-primary"
+cloudflared_primary_cores            = 1
+cloudflared_primary_memory           = 512
+cloudflared_primary_swap             = 256
+cloudflared_primary_disk_storage     = "local-lvm"
+cloudflared_primary_disk_size        = 8
+cloudflared_primary_template_file_id = "local:vztmpl/debian-12-standard_12.12-1_amd64.tar.zst"
+
+# Networking
+cloudflared_primary_network_bridge = "vmbr0"
+cloudflared_primary_mac_address    = "bc:24:11:00:05:10"
+cloudflared_primary_ipv4_address   = "dhcp"
+
+# SSH keys to inject for root access
+cloudflared_primary_ssh_public_keys = [
+  # "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... root@mgmt-devops",
+  # "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACA... root@proxmox",
+  # "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACA... root@tuxmox"
+]
+
+# LXC Privilege mode (true = unprivileged)
+cloudflared_primary_unprivileged = true
+
+# ==============================================================================
+# Cloudflared Secondary LXC Configuration (Node: tuxmox)
+# ==============================================================================
+cloudflared_secondary_ct_id            = 511
+cloudflared_secondary_hostname         = "cloudflared-secondary"
+cloudflared_secondary_cores            = 1
+cloudflared_secondary_memory           = 512
+cloudflared_secondary_swap             = 256
+cloudflared_secondary_disk_storage     = "local-lvm"
+cloudflared_secondary_disk_size        = 8
+cloudflared_secondary_template_file_id = "local:vztmpl/debian-12-standard_12.12-1_amd64.tar.zst"
+
+# Networking
+cloudflared_secondary_network_bridge = "vmbr0"
+cloudflared_secondary_mac_address    = "bc:24:11:00:05:11"
+cloudflared_secondary_ipv4_address   = "dhcp"
+
+# SSH keys to inject for root access
+cloudflared_secondary_ssh_public_keys = [
+  # "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... root@mgmt-devops",
+  # "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACA... root@proxmox",
+  # "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACA... root@tuxmox"
+]
+
+# LXC Privilege mode (true = unprivileged)
+cloudflared_secondary_unprivileged = true
+
+# ==============================================================================
+# AdGuard Home Primary LXC Configuration (Node: proxmox)
+# ==============================================================================
+adguard_primary_ct_id            = 501
+adguard_primary_hostname         = "adguard-primary"
+adguard_primary_cores            = 2
+adguard_primary_memory           = 1024
+adguard_primary_swap             = 512
+adguard_primary_disk_storage     = "local-lvm"
+adguard_primary_disk_size        = 10
+adguard_primary_template_file_id = "local:vztmpl/debian-12-standard_12.12-1_amd64.tar.zst"
+
+# Networking
+adguard_primary_network_bridge = "vmbr0"
+adguard_primary_mac_address    = "bc:24:11:00:05:01"
+adguard_primary_ipv4_address   = "10.0.0.201/24"
+adguard_primary_ipv4_gateway   = "10.0.0.1"
+adguard_dns_servers            = ["10.0.0.101"]
+
+# SSH keys to inject for root access
+adguard_primary_ssh_public_keys = [
+  # "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... root@mgmt-devops",
+  # "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACA... root@proxmox",
+  # "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACA... root@tuxmox"
+]
+
+# LXC Privilege mode (false = privileged)
+adguard_primary_unprivileged = false
+
+# ==============================================================================
+# AdGuard Home Secondary LXC Configuration (Node: tuxmox)
+# ==============================================================================
+adguard_secondary_ct_id            = 502
+adguard_secondary_hostname         = "adguard-secondary"
+adguard_secondary_cores            = 2
+adguard_secondary_memory           = 1024
+adguard_secondary_swap             = 512
+adguard_secondary_disk_storage     = "local-lvm"
+adguard_secondary_disk_size        = 10
+adguard_secondary_template_file_id = "local:vztmpl/debian-12-standard_12.12-1_amd64.tar.zst"
+
+# Networking
+adguard_secondary_network_bridge = "vmbr0"
+adguard_secondary_mac_address    = "bc:24:11:00:05:02"
+adguard_secondary_ipv4_address   = "10.0.0.202/24"
+adguard_secondary_ipv4_gateway   = "10.0.0.1"
+
+# SSH keys to inject for root access
+adguard_secondary_ssh_public_keys = [
+  # "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... root@mgmt-devops",
+  # "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACA... root@proxmox",
+  # "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACA... root@tuxmox"
+]
+
+# LXC Privilege mode (false = privileged)
+adguard_secondary_unprivileged = false
+
+# ==============================================================================
+# Monitoring (Uptime Kuma) LXC Configuration (Node: proxmox)
+# ==============================================================================
+monitoring_ct_id            = 601
+monitoring_hostname         = "monitoring"
+monitoring_cores            = 2
+monitoring_memory           = 1024
+monitoring_swap             = 512
+monitoring_disk_storage     = "local-lvm"
+monitoring_disk_size        = 16
+monitoring_template_file_id = "local:vztmpl/debian-12-standard_12.12-1_amd64.tar.zst"
+
+# Networking
+monitoring_network_bridge = "vmbr0"
+monitoring_mac_address    = "bc:24:11:00:06:01"
+monitoring_ipv4_address   = "dhcp"
+
+# SSH keys to inject for root access
+monitoring_ssh_public_keys = [
+  # "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... root@mgmt-devops",
+  # "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACA... root@proxmox",
+  # "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACA... root@tuxmox"
+]
+
+# LXC Privilege mode (false = privileged for Docker nesting)
+monitoring_unprivileged = false
+
+# ==============================================================================
+# Workstation LXC Configuration
+# ==============================================================================
+workstation_ct_id            = 901
+workstation_hostname         = "workstation"
+workstation_cores            = 4
+workstation_memory           = 8192
+workstation_swap             = 2048
+workstation_disk_storage     = "local-lvm"
+workstation_disk_size        = 40
+workstation_template_file_id = "local:vztmpl/debian-12-standard_12.12-1_amd64.tar.zst"
+
+# Networking
+workstation_network_bridge = "vmbr0"
+workstation_mac_address    = "bc:24:11:00:09:01"
+workstation_ipv4_address   = "dhcp"
+
+# SSH keys to inject for root access
+workstation_ssh_public_keys = [
+  # "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... root@mgmt-devops",
+  # "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACA... root@proxmox",
+  # "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACA... root@tuxmox"
+]
+
+# LXC Privilege mode (true = unprivileged)
+workstation_unprivileged = true
