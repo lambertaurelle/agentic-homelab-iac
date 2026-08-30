@@ -10,29 +10,46 @@ This repository (`homelab-iac`) manages declarative infrastructure-as-code and c
 
 ---
 
-## 🤖 Antigravity 2.0 Subagents & Delegation Registry
+## 🤖 Antigravity Subagents & Mandatory Delegation Registry
 
-When operating in Antigravity or Antigravity 2.0, two specialized custom agents are available in `.agents/agents/`. The general/main agent MUST proactively delegate specialized tasks to them using `invoke_subagent`:
+When operating in Antigravity or Antigravity 2.0, two specialized custom subagents are declared in `.agents/agents/`. The main agent MUST proactively delegate domain-specific tasks to them using `invoke_subagent` rather than attempting to execute them directly in the root session.
 
-### 1. `@proxmox-ops` (Cluster SRE & Operations)
-- **Role**: Proxmox VE Cluster SRE & Operations Agent.
+Both subagents are fully empowered with write tools and terminal execution permissions (`enable_write_tools: true`, `enable_subagent_tools: true`, `enable_mcp_tools: true`) to construct implementation plans, modify configurations, run validation commands, and return comprehensive reports.
+
+### Subagent Delegation Routing Table
+
+| Subagent | `TypeName` | Primary Capabilities & Skills | Trigger Patterns / User Requests |
+| :--- | :--- | :--- | :--- |
+| **`@proxmox-ops`** | `proxmox-ops` | - `proxmox-bootstrap`<br>- `proxmox-cluster-health`<br>- `proxmox-workload-debug`<br>- `proxmox-maintenance` | - Day-0 cluster bootstrap & secrets setup<br>- Quorum audit, storage pool checks, DNS verification<br>- OpenTofu drift detection (`tofu plan`)<br>- Container crash loop, systemd journal, Docker log debug<br>- Daily updates, rolling reboots, VZDump backup/restore |
+| **`@workload-architect`** | `workload-architect` | - `proxmox-scaffold-app` | - Deploying / scaffolding new applications or LXCs<br>- Authoring `tofu/ct-<app>.tf` and `stacks/<app>/docker-compose.yml`<br>- Sizing compute, RAM, storage, and GPU passthrough<br>- Configuring Watchtower push-to-main continuous deployment |
+
+### Subagent Details
+
+#### 1. `@proxmox-ops` (Cluster SRE & Operations)
+- **TypeName**: `proxmox-ops`
 - **Definition**: `.agents/agents/proxmox-ops.md`
-- **When to Delegate**:
-  - Cluster Day-0 onboarding and provisioning (`proxmox-bootstrap`);
-  - Health checks, quorum inspection, and storage pool auditing (`proxmox-cluster-health`);
-  - OpenTofu state drift detection and alignment (`proxmox-cluster-health`);
-  - Troubleshooting failing LXC or Docker containers, inspecting logs (`proxmox-workload-debug`);
-  - Daily updates, rolling reboots, and snapshot backup/restores (`proxmox-maintenance`).
+- **Capabilities**: Planning, writing files, executing Proxmox / OpenTofu CLI commands (`pvecm`, `pvesm`, `pct`, `tofu`, `scripts/`).
+- **Invocation Example**:
+  ```json
+  {
+    "TypeName": "proxmox-ops",
+    "Role": "Proxmox Cluster SRE",
+    "Prompt": "Run a full health check on the Proxmox cluster, audit quorum, check storage pools, and detect OpenTofu state drift."
+  }
+  ```
 
-### 2. `@workload-architect` (Application & Workload Architect)
-- **Role**: Workload & Application Architect Agent.
+#### 2. `@workload-architect` (Application & Workload Architect)
+- **TypeName**: `workload-architect`
 - **Definition**: `.agents/agents/workload-architect.md`
-- **When to Delegate**:
-  - Sizing, designing, and onboarding any new application or service (`proxmox-scaffold-app`);
-  - Scaffolding Type 1 Custom In-House apps with Watchtower instant push-to-main CD;
-  - Scaffolding Type 2 Third-Party Docker Compose stacks (e.g. Immich, Plex, Vaultwarden);
-  - Scaffolding Type 3 Native bare-metal Debian services;
-  - Configuring GPU passthrough and storage bind mounts.
+- **Capabilities**: Planning, generating OpenTofu container modules, Docker Compose stacks, `.env.example`, and Watchtower deployment snippets.
+- **Invocation Example**:
+  ```json
+  {
+    "TypeName": "workload-architect",
+    "Role": "Workload Architect",
+    "Prompt": "Scaffold a new custom application container for 'genealogy-api' on node 'tuxmox' with instant Watchtower CD."
+  }
+  ```
 
 ---
 
@@ -56,6 +73,6 @@ Customizations are packaged as standard plugins under `.agents/plugins/`:
 ## Engineering Workflow Guidelines
 
 1. **Alignment & Planning**: Before starting complex tasks, use `/grill-me` or `/to-spec` to align on requirements and architecture.
-2. **Specialized Delegation**: Delegate cluster operations to `@proxmox-ops` and application scaffolding to `@workload-architect`.
+2. **Specialized Delegation**: The main agent must immediately delegate cluster operations to `@proxmox-ops` (`TypeName: "proxmox-ops"`) and application onboarding to `@workload-architect` (`TypeName: "workload-architect"`).
 3. **Skill Evolution**: When building new administrative workflows, author a new skill using `skill-creator` backed by idempotent shell scripts in `scripts/`, then validate it with `skill-evaluator`.
 4. **Execution**: Implement changes against specific issues, validating via pre-commit, OpenTofu format/validate, and security scans before submission.
