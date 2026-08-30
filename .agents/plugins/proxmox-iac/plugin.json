@@ -1,0 +1,7 @@
+{
+  "name": "proxmox-iac",
+  "version": "1.0.0",
+  "description": "Agent skills plugin for Proxmox VE homelab declarative IaC management, Day-0 bootstrapping, health observability, container debugging, and continuous deployment scaffolding.",
+  "author": "lambertaurelle",
+  "homepage": "https://github.com/lambertaurelle/agentic-homelab-iac"
+}

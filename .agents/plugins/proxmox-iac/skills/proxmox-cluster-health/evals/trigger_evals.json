@@ -1,0 +1,101 @@
+{
+  "skill": "proxmox-cluster-health",
+  "queries": [
+    {
+      "quadrant": "Q1_direct",
+      "query": "Check cluster health and verify if all nodes are online.",
+      "expect": "trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q1_direct",
+      "query": "Verify Proxmox quorum status and storage pools.",
+      "expect": "trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q1_direct",
+      "query": "Audit storage pools and check if there is any OpenTofu drift.",
+      "expect": "trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q1_direct",
+      "query": "Run a drift check between live Proxmox state and tofu config.",
+      "expect": "trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q2_colloquial",
+      "query": "Is everything looking good on the hypervisor right now?",
+      "expect": "trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q2_colloquial",
+      "query": "Can you check if my cluster quorum is healthy and storage is connected?",
+      "expect": "trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q2_colloquial",
+      "query": "Inspect the hypervisor nodes and make sure DNS is resolving.",
+      "expect": "trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q2_colloquial",
+      "query": "Do a quick health check of the Proxmox cluster.",
+      "expect": "trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q3_near_miss",
+      "query": "Bootstrap the homelab infrastructure from scratch.",
+      "expect": "no-trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q3_near_miss",
+      "query": "My Plex container is crashing with exit code 137, please debug it.",
+      "expect": "no-trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q3_near_miss",
+      "query": "Scaffold a new Immich photo stack on my cluster.",
+      "expect": "no-trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q3_near_miss",
+      "query": "Perform a rolling reboot of the cluster nodes.",
+      "expect": "no-trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q4_sibling",
+      "query": "Run the nightly package update on all nodes.",
+      "expect": "no-trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q4_sibling",
+      "query": "Backup all containers to my NAS backup share.",
+      "expect": "no-trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q4_sibling",
+      "query": "Show me the logs of CT 501 AdGuard container.",
+      "expect": "no-trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q4_sibling",
+      "query": "How do I write a new agent skill with skill-creator?",
+      "expect": "no-trigger",
+      "split": "val"
+    }
+  ]
+}

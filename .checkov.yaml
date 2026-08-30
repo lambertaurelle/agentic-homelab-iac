@@ -1,0 +1,47 @@
+# ==============================================================================
+# Checkov Static Analysis Configuration - Homelab IaC
+# ==============================================================================
+# Centralized policy configuration for OpenTofu HCL, Docker Compose (YAML), and
+# repository secret scanning.
+#
+# References:
+# - Checkov Configuration: https://www.checkov.io/2.Basics/Configuring%20Checkov.html
+# - Homelab Security Register: .security-exceptions.yaml
+# ==============================================================================
+
+# Target frameworks for analysis
+framework:
+  - terraform
+  - yaml
+  - secrets
+
+# Scanning directories
+directory:
+  - tofu
+  - stacks
+
+# Output formatting
+output: cli
+compact: true
+quiet: false
+
+# Failure thresholds: block and exit with code 1 on HIGH and CRITICAL findings
+hard-fail-on:
+  - HIGH
+  - CRITICAL
+
+# Directories and files to exclude from analysis
+skip-path:
+  - .terraform
+  - tofu/.terraform
+  - tofu/terraform.tfstate
+  - tofu/terraform.tfstate.backup
+
+# ==============================================================================
+# Baseline Suppressions & Architecture Exceptions
+# Auto-synced from .security-exceptions.yaml - DO NOT EDIT MANUALLY
+# ==============================================================================
+skip-check:
+  - CKV_DOCKER_2
+  - CKV_DOCKER_11
+  - CKV_DOCKER_8

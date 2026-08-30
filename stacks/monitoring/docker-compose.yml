@@ -1,0 +1,17 @@
+# ==============================================================================
+# Uptime Kuma Monitoring & Alerting Stack
+# Target: Monitoring LXC Container (CT 601 on proxmox)
+# ==============================================================================
+
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: uptime-kuma
+    restart: always
+    ports:
+      - "${UPTIME_KUMA_PORT:-3001}:3001"
+    volumes:
+      - /opt/monitoring/data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    security_opt:
+      - no-new-privileges:true

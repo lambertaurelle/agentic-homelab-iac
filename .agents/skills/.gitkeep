@@ -1,0 +1,2 @@
+# This directory is reserved for standalone workspace agent skills.
+# Core plugins are located under .agents/plugins/

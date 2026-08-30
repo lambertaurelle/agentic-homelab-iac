@@ -1,0 +1,21 @@
+# ==============================================================================
+# Centralized Risk Acceptance & Security Exceptions Registry
+# Single Actionable Source of Truth for all IaC & Vulnerability Suppressions
+# ==============================================================================
+version: "1.0"
+exceptions:
+  - id: EXC-001
+    tool: checkov
+    rule: CKV_DOCKER_2
+    target: "stacks/*"
+    severity: LOW
+    reason: "Healthchecks handled externally via Uptime Kuma (CT 601)"
+    review_by: "2027-01-01"
+
+  - id: EXC-002
+    tool: trivy
+    rule: AVD-DS-0002
+    target: "stacks/*"
+    severity: LOW
+    reason: "Healthchecks handled externally via Uptime Kuma (CT 601)"
+    review_by: "2027-01-01"
