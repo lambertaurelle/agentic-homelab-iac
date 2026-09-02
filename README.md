@@ -14,10 +14,11 @@ Declarative, agentic-first, pedagogical infrastructure-as-code template for **Pr
 Most homelab repositories are cluttered with monolithic personal stacks (Plex, torrent clients, niche apps) that break when cloned on different hardware.
 
 `agentic-homelab-iac` takes a modern **Agentic-First** approach:
-1. **Pristine 3-Service Baseline**: Deploys only what every homelab needs on Day-0:
+1. **Pristine 4-Service Baseline**: Deploys only what every homelab needs on Day-0:
    - 🛡️ **AdGuard Home** (`CT 501`): Local DNS resolver, ad-blocking, and DHCP management.
    - 🚇 **Cloudflare Tunnel** (`CT 510`): Zero-trust inbound access without opening firewall ports.
    - 📊 **Uptime Kuma** (`CT 601`): Health monitoring and instant Discord/Telegram alerts.
+   - ☁️ **Offsite Cloud Backup** (`CT 602`): Differential client-side encrypted (AES-256) cloud backups (pCloud, S3, B2 via Restic + Rclone) with remote quota alerts.
    - 🛠️ **`mgmt-devops`** (`CT 900`): Dedicated unprivileged IaC control plane running OpenTofu and Antigravity CLI.
 2. **Dynamic Workload Scaffolding**: Any additional application (Immich, Plex, Vaultwarden, custom APIs) is designed, sized, and deployed on demand in seconds by asking your AI agent.
 3. **Hardware & Topology Agnostic**: Works out-of-the-box on a **single mini-PC** (`local-lvm`/`local-zfs`) or a **multi-node high-availability cluster** with optional NAS (NFS/SMB/PBS) storage.
@@ -41,6 +42,7 @@ flowchart TD
         DNS["CT 501: AdGuard Home (DNS & DHCP)"]
         Ingress["CT 510: Cloudflare Tunnel (Ingress)"]
         Kuma["CT 601: Uptime Kuma (Observability)"]
+        Backup["CT 602: Offsite Cloud Backup (Restic/Rclone)"]
     end
 
     PVE --> Mgmt
@@ -241,11 +243,14 @@ agentic-homelab-iac/
 │               ├── proxmox-cluster-health/ # Read-only health & drift audits
 │               ├── proxmox-workload-debug/ # Container logs & troubleshooting
 │               ├── proxmox-scaffold-app/   # Workload onboarding & sizing
-│               └── proxmox-maintenance/    # Rolling updates & reboots
+│               ├── proxmox-maintenance/    # Rolling updates & reboots
+│               └── proxmox-offsite-backup/ # Automated differential cloud backup & quota audits
 ├── AGENTS.md                       # Subagent delegation registry & repository memory
 ├── CONTRIBUTING.md                 # Community contributing guidelines & PR workflow
 ├── LICENSE                         # Apache 2.0 Open Source License
 ├── README.md                       # Pedagogical quick-start & operational guide
+├── config/
+│   └── backup-targets.example.yaml # Generic offsite backup target dataset template
 ├── docs/
 │   ├── ARCHITECTURE.md             # Topology, storage abstractions, and node models
 │   ├── CICD.md                     # CI validation & custom app continuous deployment
@@ -260,10 +265,16 @@ agentic-homelab-iac/
 │   ├── install-adguard.sh          # AdGuard Home setup script
 │   ├── install-antigravity-remote.sh # Antigravity Remote Control daemon installer
 │   ├── install-cloudflared.sh      # Cloudflare Tunnel connector installer
+│   ├── install-offsite-backup.sh   # Offsite cloud backup worker installer (CT 602)
+│   ├── manage-backup-targets.sh    # Declarative backup target dataset CLI
+│   ├── restore-all-lxc.sh          # Automated VZDump container restoration
+│   ├── run-offsite-backup.sh       # Restic + Rclone differential backup runner
 │   ├── scaffold-app.sh             # Dynamic 3-mode workload scaffolder CLI
 │   ├── scheduled-reboot.sh         # Safe rolling reboot engine
 │   ├── setup-discord-alerts.sh     # Discord webhook alerting setup
+│   ├── setup-maintenance-cron.sh   # Maintenance cron synchronization
 │   ├── setup-mgmt-lxc.sh           # One-line host provisioner for CT 900
+│   ├── setup-offsite-backup-schedule.sh # Daily 03:45 AM offsite backup cron installer
 │   ├── setup-proxmox-nas-backups.sh # Configures backup storage & VZDump
 │   ├── update-cluster-stack.sh     # Daily cluster update engine
 │   └── instance/                   # Custom instance installer & maintenance scripts
@@ -274,6 +285,7 @@ agentic-homelab-iac/
     ├── ct-adguard.tf               # Core AdGuard Home LXC definition (CT 501)
     ├── ct-cloudflared.tf           # Core Cloudflare Tunnel LXC definition (CT 510)
     ├── ct-monitoring.tf            # Core Uptime Kuma LXC definition (CT 601)
+    ├── ct-offsite-backup.tf        # Core Offsite Cloud Backup LXC definition (CT 602)
     ├── outputs.tf                  # Infrastructure outputs
     ├── providers.tf                # OpenTofu bpg/proxmox provider
     ├── terraform.tfvars.example    # Variables configuration template

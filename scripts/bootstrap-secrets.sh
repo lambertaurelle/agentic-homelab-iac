@@ -292,6 +292,25 @@ monitoring_mac_address      = "bc:24:11:00:06:01"
 monitoring_ipv4_address     = "dhcp"
 monitoring_ssh_public_keys  = ${SSH_KEYS_HCL}
 monitoring_unprivileged     = false
+
+# ==============================================================================
+# Offsite Cloud Backup LXC Configuration (CT 602 on utility node)
+# ==============================================================================
+offsite_backup_ct_id            = 602
+offsite_backup_hostname         = "${OFFSITE_BACKUP_HOSTNAME:-offsite-backup}"
+offsite_backup_cores            = 1
+offsite_backup_memory           = 1024
+offsite_backup_swap             = 512
+offsite_backup_disk_storage     = "local-lvm"
+offsite_backup_disk_size        = 8
+offsite_backup_template_file_id = "local:vztmpl/debian-12-standard_12.12-1_amd64.tar.zst"
+offsite_backup_network_bridge   = "vmbr0"
+offsite_backup_mac_address      = "bc:24:11:00:06:02"
+offsite_backup_ipv4_address     = "dhcp"
+offsite_backup_ssh_public_keys  = ${SSH_KEYS_HCL}
+offsite_backup_unprivileged     = false
+offsite_backup_started          = false
+offsite_backup_start_on_boot    = false
 TFVARS_EOF
 
 chmod 600 "${TOFU_TFVARS}"
@@ -312,6 +331,37 @@ DISCORD_SECURITY_WEBHOOK_URL=${DISCORD_SECURITY_WEBHOOK_URL:-}
 MONITORING_EOF
 chmod 600 "${REPO_ROOT}/stacks/monitoring/.env"
 echo "[+] Sliced baseline .env for stacks/monitoring"
+
+# ------------------------------------------------------------------------------
+# 5. Generate Core Baseline stacks/offsite-backup/.env
+# ------------------------------------------------------------------------------
+mkdir -p "${REPO_ROOT}/stacks/offsite-backup"
+python3 -c "
+import os, shlex
+
+keys = [
+    ('OFFSITE_BACKUP_REMOTE_NAME', 'offsite-remote'),
+    ('OFFSITE_BACKUP_REMOTE_TYPE', 'pcloud'),
+    ('OFFSITE_BACKUP_REMOTE_PATH', 'homelab-backups'),
+    ('RESTIC_PASSWORD', ''),
+    ('OFFSITE_BACKUP_QUOTA_WARN_PERCENT', '85'),
+    ('OFFSITE_BACKUP_QUOTA_CRIT_PERCENT', '95'),
+    ('PCLOUD_REGION', 'eu'),
+    ('PCLOUD_AUTH_TOKEN', ''),
+    ('PCLOUD_USERNAME', ''),
+    ('PCLOUD_PASSWORD', ''),
+    ('DISCORD_MONITORING_WEBHOOK_URL', os.getenv('DISCORD_MONITORING_WEBHOOK_URL', os.getenv('DISCORD_WEBHOOK_URL', ''))),
+]
+
+target = '${REPO_ROOT}/stacks/offsite-backup/.env'
+with open(target, 'w') as f:
+    for k, default in keys:
+        val = os.getenv(k, default)
+        f.write(f'{k}={shlex.quote(val)}\n')
+"
+chmod 600 "${REPO_ROOT}/stacks/offsite-backup/.env"
+echo "[+] Sliced baseline .env for stacks/offsite-backup"
+
 
 # ------------------------------------------------------------------------------
 # 5. Invoke Instance Hook (if present)

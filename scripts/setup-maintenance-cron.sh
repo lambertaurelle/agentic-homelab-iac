@@ -147,7 +147,15 @@ CRON_NODE2_EOF
 echo "[+] Crontab installed on node-2 (${NODE2_IP})."
 
 # ------------------------------------------------------------------------------
-# 4. Verification & Diagnostics
+# 4. Offsite Cloud Backup Schedule Setup
+# ------------------------------------------------------------------------------
+echo "[*] Step 4/5: Configuring offsite cloud backup schedule (03:45 AM)..."
+if [ -f "${SCRIPT_DIR}/setup-offsite-backup-schedule.sh" ]; then
+    bash "${SCRIPT_DIR}/setup-offsite-backup-schedule.sh" || echo "[-] Notice: Offsite backup schedule setup skipped or container not ready yet."
+fi
+
+# ------------------------------------------------------------------------------
+# 5. Verification & Diagnostics
 # ------------------------------------------------------------------------------
 echo "=============================================================================="
 echo "    Verification: Active Crontab Schedules                                    "

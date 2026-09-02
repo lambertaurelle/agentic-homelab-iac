@@ -1,0 +1,77 @@
+{
+  "skill": "proxmox-offsite-backup",
+  "queries": [
+    {
+      "quadrant": "Q1_direct",
+      "query": "Add a new folder to my offsite backup.",
+      "expect": "trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q1_direct",
+      "query": "Remove the frigate media directory from the cloud backup.",
+      "expect": "trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q1_direct",
+      "query": "Check my pCloud storage backup quota.",
+      "expect": "trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q1_direct",
+      "query": "Run an on-demand differential backup to pCloud right now.",
+      "expect": "trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q2_colloquial",
+      "query": "Can you make sure my photos are backed up to the cloud?",
+      "expect": "trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q2_colloquial",
+      "query": "How much space do I have left on my cloud backup account?",
+      "expect": "trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q2_colloquial",
+      "query": "I want to restore a folder from the remote cloud repository.",
+      "expect": "trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q2_colloquial",
+      "query": "Stop backing up audiobooks to the cloud.",
+      "expect": "trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q3_negative",
+      "query": "Update all packages on the Proxmox nodes.",
+      "expect": "no_trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q3_negative",
+      "query": "Scaffold a new container for Plex.",
+      "expect": "no_trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q3_negative",
+      "query": "Why is my AdGuard container crashing?",
+      "expect": "no_trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q3_negative",
+      "query": "Check the health and quorum of the Proxmox cluster.",
+      "expect": "no_trigger",
+      "split": "val"
+    }
+  ]
+}

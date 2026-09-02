@@ -16,6 +16,7 @@ gantt
 
     section Daily Backups
     NAS VZDump Snapshots (03:00)       :active, 03:00, 30m
+    Offsite Cloud Differential (03:45) :active, 03:45, 30m
 
     section Weekly Rolling Reboots
     Utility Node node-1 Reboot (Sun 04:00) :crit, 04:00, 15m
@@ -34,11 +35,13 @@ gantt
 | Schedule | Target / Scope | Script / Tool | Description & Guards | Log Location |
 | :--- | :--- | :--- | :--- | :--- |
 | **Daily 03:00 AM** | All LXC Containers | `/etc/pve/vzdump.cron` | Daily zstd-compressed VZDump snapshot backups to backup storage (`syno-backup` or `local-backup`). Retention: 3 daily, 2 weekly. | `/var/log/vzdump.log` |
+| **Daily 03:45 AM** | VZDump & Stateful Datasets | `scripts/setup-offsite-backup-schedule.sh` | Automated differential offsite cloud backup (pCloud, S3, B2 via Restic/Rclone in CT 602). Prunes retention (3 daily, 2 weekly), audits remote quota, and sends Discord embed alert. | `/var/log/homelab-offsite-backup.log` |
 | **Sunday 04:00 AM** | Utility Node (`node-1`) | `scripts/scheduled-reboot.sh` | Weekly rolling reboot of Utility Node. Requires Compute Node (`node-2`) and Secondary DNS (`10.0.0.202`) to be healthy. | `/var/log/homelab-reboot.log` |
 | **Monday 04:00 AM** | Compute Node (`node-2`) | `scripts/scheduled-reboot.sh` | Weekly rolling reboot of Compute Node. Requires Utility Node (`node-1`) and Primary DNS (`10.0.0.201`) to be healthy. | `/var/log/homelab-reboot.log` |
 | **Daily 05:00 AM** | Both Nodes & Containers | `scripts/update-cluster-stack.sh` | OS dist-upgrade across hypervisors and LXC containers, native app updates (AdGuard, adguardhome-sync, Cloudflared, Antigravity CLI), Docker Compose pull, restart, and image prune. | `/var/log/homelab-updates.log` |
 | **Daily 05:30 AM** | Hypervisors & Management Workspace | `scripts/scan-security.sh` | Daily automated DevSecOps scan (Trivy, Checkov, Gitleaks, ShellCheck, Tofu fmt/validate), Discord security webhook dispatch, and markdown audit reports. | `/var/log/homelab-security-audit.log` |
 | **Every 5 Minutes** | Primary AdGuard (CT 501) | `adguardhome-sync.service` | Bi-directional replication of DNS rules, rewrites, and static DHCP leases from CT 501 to CT 502. | `journalctl -u adguardhome-sync` |
+
 
 ---
 
@@ -313,6 +316,50 @@ resource "proxmox_virtual_environment_container" "example" {
    - Any newly provisioned LXC container is automatically included in nightly backups at 03:00 AM without manual list edits.
 2. Edit `scripts/restore-all-lxc.sh`:
    - Add the CTID to `get_default_node()` and `get_known_name()` tables for disaster recovery runbooks.
+
+---
+
+### Step 2b: Managing Offsite Differential Backups (CT 602)
+
+1. **Declarative Target Management**:
+   - Backup targets are configured in `config/backup-targets.yaml` (or `config/instance/backup-targets.yaml`).
+   - Use the management CLI to inspect or update targets:
+     ```bash
+     # List all backup targets and existence status
+     ./scripts/manage-backup-targets.sh list
+
+     # Verify reachability of mount points inside CT 602
+     pct exec 602 -- manage-backup-targets verify
+
+     # Add or update a target directory
+     ./scripts/manage-backup-targets.sh add --name "my-data" --path "/mnt/backup-source/nas-data/my-data"
+
+     # Enable or disable a dataset target
+     ./scripts/manage-backup-targets.sh enable --name "my-data"
+     ./scripts/manage-backup-targets.sh disable --name "my-data"
+     ```
+
+2. **Daily 03:45 AM Host Cron**:
+   - Installed via `scripts/setup-offsite-backup-schedule.sh` onto `node-1` at `/etc/cron.d/homelab-offsite-backup`.
+   - Starts CT 602, runs `run-offsite-backup --ephemeral`, prunes snapshots (`keep-daily 3, keep-weekly 2`), audits remote quota, dispatches Discord embed alert, and cleanly shuts down.
+
+3. **Triggering On-Demand Backups**:
+   ```bash
+   # Start container to trigger one-shot backup and auto-poweroff
+   pct start 602
+
+   # Or trigger backup service directly if already running
+   pct exec 602 -- systemctl start offsite-backup.service
+   ```
+
+4. **Auditing Cloud Storage Quota & Snapshots**:
+   ```bash
+   # Check cloud storage used, free, and total quota
+   pct exec 602 -- rclone about offsite-remote:
+
+   # View list of cloud snapshots
+   pct exec 602 -- restic snapshots
+   ```
 
 ---
 

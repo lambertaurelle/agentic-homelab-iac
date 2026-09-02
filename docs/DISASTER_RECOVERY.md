@@ -321,3 +321,53 @@ Even if DNS resolution is completely down, all nodes and services remain accessi
 - **Compute Node (`node-2`) UI**: `https://10.0.0.20:8006/`
 - **Centralized NAS UI**: `http://10.0.0.4:5000/`
 - **Primary Router UI**: `http://10.0.0.1/`
+
+---
+
+## ☁️ Scenario E: Offsite Cloud Restoration (pCloud / Restic)
+
+Use this scenario if local Synology NAS storage or local VZDump archives are lost, corrupted, or unreachable.
+
+All VZDump snapshots and stateful homelab datasets (Immich photos, Audiobookshelf, Frigate clips) are replicated daily to encrypted cloud storage via Restic + Rclone.
+
+### 1. Discover Available Cloud Snapshots
+From Management Workspace (`mgmt-devops`) or container CT 602 (`offsite-backup`):
+
+```bash
+pct exec 602 -- restic snapshots
+```
+
+*Output displays snapshot IDs, timestamps, tags (e.g. `vzdump-snapshots`, `immich-photos`), and source paths.*
+
+### 2. Restore VZDump Archives from Cloud
+To restore container snapshot archives back to the local NAS storage pool:
+
+```bash
+# 1. Restore the latest VZDump snapshot archive from cloud to the local dump directory
+pct exec 602 -- restic restore latest --tag vzdump-snapshots --target /mnt/backup-source/vzdump/
+
+# 2. Restore containers using the standard restoration script
+/root/homelab-iac/scripts/restore-all-lxc.sh --all --yes
+```
+
+### 3. Restore Specific Datasets or Photos
+To restore a specific folder (e.g. Immich photo library or Audiobooks):
+
+```bash
+# Restore specific snapshot to NAS photos directory
+pct exec 602 -- restic restore <SNAPSHOT_ID> --target /mnt/backup-source/nas-photos/
+```
+
+### 4. Direct Cloud Recovery Without Proxmox (Bare Metal / External Machine)
+In a total loss scenario where the Proxmox cluster is gone, any standard computer with `rclone` and `restic` can recover the entire repository:
+
+```bash
+# 1. Configure rclone for pCloud (or cloud provider)
+rclone config
+
+# 2. Export encryption password and restore directly
+export RESTIC_REPOSITORY="rclone:pcloud:homelab-backups"
+export RESTIC_PASSWORD="<your_restic_password>"
+
+restic restore latest --target /local/recovery/path
+```

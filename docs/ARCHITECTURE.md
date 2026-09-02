@@ -24,6 +24,7 @@ graph TB
             CT501["CT 501: AdGuard Home (Primary DNS / DHCP)"]
             CT510["CT 510: Cloudflare Tunnel (Primary Ingress)"]
             CT601["CT 601: Uptime Kuma (Observability & Alerts)"]
+            CT602["CT 602: Offsite Cloud Backup (Restic/Rclone Differential Engine)"]
         end
 
         subgraph DynamicWorkloads ["Dynamic Workload Archetypes"]
@@ -33,9 +34,10 @@ graph TB
         end
     end
 
-    subgraph StorageLayer ["Storage Layer (Local / NAS)"]
+    subgraph StorageLayer ["Storage Layer (Local / NAS / Cloud)"]
         LocalStorage[("Local Storage Pools<br/>local-lvm / local-zfs")]
         SharedNAS[("Optional Centralized NAS<br/>NFS / SMB / PBS Snapshots")]
+        CloudRemote[("Encrypted Cloud Remote<br/>pCloud / S3 / B2 / GDrive")]
     end
 
     Internet -->|Zero Trust Tunnel| CF
@@ -45,6 +47,7 @@ graph TB
 
     Cluster --- LocalStorage
     Cluster --- SharedNAS
+    CT602 -.->|Streaming Encrypted Chunks| CloudRemote
 ```
 
 > 💡 **Instance-Specific Private Overlays**: Custom hardware configurations, personal container stacks, and specialized scripts reside in dedicated `instance/` subdirectories (ignored on the public starter template):
@@ -140,3 +143,18 @@ graph TD
 2. **Layer 2: IaC SAST & Static Policy**: Checkov (`.checkov.yaml`) audits OpenTofu HCL and Docker Compose YAML against CIS benchmarks.
 3. **Layer 3: Dependency SCA**: Trivy (`.trivy.yaml`) scans packages and container layers for known CVEs.
 4. **Layer 4: Code Hygiene**: ShellCheck, `tofu fmt`, and `tofu validate` ensure script robustness and schema validity.
+
+---
+
+## ☁️ Differential Cloud Offsite Backup Architecture (CT 602)
+
+The architecture includes a declarative, ephemeral offsite cloud backup pipeline ensuring multi-tier disaster recovery:
+- **Tier 1 (Local Rapid Recovery)**: Daily local/NAS VZDump container snapshots at 03:00 AM (< 5 min RTO).
+- **Tier 2 (Offsite Cloud Disaster Recovery)**: Ephemeral worker container (`CT 602: offsite-backup`) streams deduplicated, client-side encrypted snapshots and dataset targets to offsite cloud storage at 03:45 AM.
+
+### Architectural Principles
+1. **Zero-Knowledge Client-Side Encryption**: AES-256 encryption via Restic occurs entirely in memory before chunks leave the hypervisor; cloud providers never receive plaintext.
+2. **Provider-Agnostic Backend**: Leverages Rclone as a local REST translation bridge, supporting pCloud, Backblaze B2, AWS S3, Google Drive, and generic WebDAV/SFTP endpoints.
+3. **Content-Defined Chunking (CDC)**: In-memory differential deduplication minimizes bandwidth and upload times, transmitting only changed byte blocks.
+4. **Ephemeral Lifecycle**: CT 602 boots via host cron, executes streaming backups of all enabled targets, audits cloud storage quota via `rclone about`, dispatches rich Discord embeds, and automatically issues `poweroff`.
+5. **Declarative Target Management**: Targets are configured declaratively in `config/backup-targets.yaml` (with instance overlays taking precedence) and managed via the `manage-backup-targets.sh` CLI.
