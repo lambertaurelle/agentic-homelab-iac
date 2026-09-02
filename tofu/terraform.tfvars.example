@@ -162,3 +162,41 @@ monitoring_ssh_public_keys = [
 
 # LXC Privilege mode (false = privileged for Docker nesting)
 monitoring_unprivileged = false
+
+# ==============================================================================
+# Offsite Cloud Backup LXC Configuration (Node: node-1)
+# ==============================================================================
+offsite_backup_ct_id            = 602
+offsite_backup_hostname         = "offsite-backup"
+offsite_backup_cores            = 1
+offsite_backup_memory           = 1024
+offsite_backup_swap             = 512
+offsite_backup_disk_storage     = "local-lvm"
+offsite_backup_disk_size        = 8
+offsite_backup_template_file_id = "local:vztmpl/debian-12-standard_12.12-1_amd64.tar.zst"
+
+# Networking
+offsite_backup_network_bridge = "vmbr0"
+offsite_backup_mac_address    = "bc:24:11:00:06:02"
+offsite_backup_ipv4_address   = "dhcp"
+
+# SSH keys to inject for root access
+offsite_backup_ssh_public_keys = [
+  # "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... root@mgmt-devops",
+  # "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACA... root@node-1",
+  # "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACA... root@node-2"
+]
+
+# LXC Privilege mode (false = privileged for transparent NFS read-only mounts)
+offsite_backup_unprivileged  = false
+offsite_backup_started       = false
+offsite_backup_start_on_boot = false
+
+# Storage Mount Points (Read-Only)
+offsite_backup_mount_points = [
+  # {
+  #   volume    = "/mnt/pve/syno-backup"
+  #   path      = "/mnt/backup-source/vzdump"
+  #   read_only = true
+  # }
+]

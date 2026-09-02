@@ -1,0 +1,43 @@
+# ==============================================================================
+# Declarative Backup Targets Specification (Upstream Baseline Template)
+# ==============================================================================
+# This file defines the directory targets, storage paths, exclusions, and
+# retention rules processed by the differential offsite cloud backup engine.
+#
+# Custom instance overrides should be placed in 'config/instance/backup-targets.yaml'.
+# ==============================================================================
+version: "1.0"
+
+settings:
+  # Universal snapshot retention policy applied during 'restic forget --prune'
+  retention:
+    keep_daily: 3
+    keep_weekly: 2
+    keep_monthly: 0
+    keep_yearly: 0
+
+  # Storage quota monitoring thresholds (%)
+  quota:
+    warning_threshold_percent: 85
+    critical_threshold_percent: 95
+
+# List of backup source targets
+targets:
+  - name: vzdump-snapshots
+    source: /mnt/backup-source/vzdump/dump
+    description: "Proxmox VZDump container and VM snapshot archives (.tar.zst)"
+    enabled: true
+    exclude:
+      - "*.tmp"
+      - "*.part"
+      - "*.log"
+
+  - name: stateful-data
+    source: /mnt/backup-source/nas-data/app-data
+    description: "Stateful application persistent data directories"
+    enabled: false
+    exclude:
+      - "#recycle"
+      - "@eaDir"
+      - "*.cache"
+      - "*.tmp"

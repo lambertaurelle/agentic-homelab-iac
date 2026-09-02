@@ -5,6 +5,18 @@ role: Workload & App Architect
 enable_write_tools: true
 enable_subagent_tools: true
 enable_mcp_tools: true
+commandExecutionPolicy: auto_execute
+tools:
+  - run_command
+  - write_to_file
+  - replace_file_content
+  - manage_task
+  - view_file
+  - list_dir
+  - grep_search
+  - find_by_name
+  - send_message
+  - schedule
 skills:
   - proxmox-scaffold-app
 ---

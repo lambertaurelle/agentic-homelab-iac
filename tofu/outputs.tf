@@ -78,3 +78,13 @@ output "app_node_name" {
   description = "Default Proxmox node for declarative production workload containers"
   value       = var.app_node_name
 }
+
+output "offsite_backup_container_id" {
+  description = "Container ID of the Offsite Cloud Backup worker"
+  value       = proxmox_virtual_environment_container.offsite_backup.vm_id
+}
+
+output "offsite_backup_hostname" {
+  description = "Hostname of the Offsite Cloud Backup worker"
+  value       = proxmox_virtual_environment_container.offsite_backup.initialization[0].hostname
+}

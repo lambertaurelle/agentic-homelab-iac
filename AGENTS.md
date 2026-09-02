@@ -14,13 +14,13 @@ This repository (`homelab-iac`) manages declarative infrastructure-as-code and c
 
 When operating in Antigravity or Antigravity 2.0, two specialized custom subagents are declared in `.agents/agents/`. The main agent MUST proactively delegate domain-specific tasks to them using `invoke_subagent` rather than attempting to execute them directly in the root session.
 
-Both subagents are fully empowered with write tools and terminal execution permissions (`enable_write_tools: true`, `enable_subagent_tools: true`, `enable_mcp_tools: true`) to construct implementation plans, modify configurations, run validation commands, and return comprehensive reports.
+Both subagents are fully empowered with write tools and terminal execution permissions (`tools: [run_command, write_to_file, ...]`, `commandExecutionPolicy: auto_execute`, `enable_write_tools: true`) to construct implementation plans, modify configurations, run commands directly in the terminal, and return comprehensive reports.
 
 ### Subagent Delegation Routing Table
 
 | Subagent | `TypeName` | Primary Capabilities & Skills | Trigger Patterns / User Requests |
 | :--- | :--- | :--- | :--- |
-| **`@proxmox-ops`** | `proxmox-ops` | - `proxmox-bootstrap`<br>- `proxmox-cluster-health`<br>- `proxmox-workload-debug`<br>- `proxmox-maintenance` | - Day-0 cluster bootstrap & secrets setup<br>- Quorum audit, storage pool checks, DNS verification<br>- OpenTofu drift detection (`tofu plan`)<br>- Container crash loop, systemd journal, Docker log debug<br>- Daily updates, rolling reboots, VZDump backup/restore |
+| **`@proxmox-ops`** | `proxmox-ops` | - `proxmox-bootstrap`<br>- `proxmox-cluster-health`<br>- `proxmox-workload-debug`<br>- `proxmox-maintenance`<br>- `proxmox-offsite-backup` | - Day-0 cluster bootstrap & secrets setup<br>- Quorum audit, storage pool checks, DNS verification<br>- OpenTofu drift detection (`tofu plan`)<br>- Container crash loop, systemd journal, Docker log debug<br>- Daily updates, rolling reboots, VZDump backup/restore<br>- Managing offsite cloud backup targets, quota alerts & cloud restores |
 | **`@workload-architect`** | `workload-architect` | - `proxmox-scaffold-app` | - Deploying / scaffolding new applications or LXCs<br>- Authoring `tofu/ct-<app>.tf` and `stacks/<app>/docker-compose.yml`<br>- Sizing compute, RAM, storage, and GPU passthrough<br>- Configuring Watchtower push-to-main continuous deployment |
 
 ### Subagent Details
@@ -63,6 +63,7 @@ Customizations are packaged as standard plugins under `.agents/plugins/`:
 - **`proxmox-workload-debug`**: Targeted LXC/Docker container troubleshooting, systemd/Docker logs, restart loops, and network routing.
 - **`proxmox-scaffold-app`**: Interactive and automated workload onboarding and sizing with continuous deployment boilerplate.
 - **`proxmox-maintenance`**: Daily updates engine, rolling reboots with peer node checks, and VZDump backup/restore routines.
+- **`proxmox-offsite-backup`**: Automated differential offsite cloud backup management (pCloud, S3, B2 via Restic + Rclone), backup target management (`manage-backup-targets.sh`), remote quota auditing, and cloud restorations.
 
 ### 2. `meta-skills` Plugin (`.agents/plugins/meta-skills/`)
 - **`skill-creator`**: Author, structure, and test new agent skills compliant with the agentskills.io spec.

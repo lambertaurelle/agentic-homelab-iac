@@ -624,3 +624,125 @@ variable "app_ssh_public_keys" {
   type        = list(string)
   default     = []
 }
+
+# ==============================================================================
+# Offsite Cloud Backup LXC Container Variables (CT 602)
+# ==============================================================================
+
+variable "offsite_backup_ct_id" {
+  description = "Container ID for Offsite Cloud Backup LXC"
+  type        = number
+  default     = 602
+}
+
+variable "offsite_backup_hostname" {
+  description = "Hostname for Offsite Cloud Backup container"
+  type        = string
+  default     = "offsite-backup"
+}
+
+variable "offsite_backup_cores" {
+  description = "Number of CPU cores allocated to offsite backup container"
+  type        = number
+  default     = 1
+}
+
+variable "offsite_backup_memory" {
+  description = "Dedicated RAM (MB) for offsite backup container"
+  type        = number
+  default     = 1024
+}
+
+variable "offsite_backup_swap" {
+  description = "Swap space (MB) for offsite backup container"
+  type        = number
+  default     = 512
+}
+
+variable "offsite_backup_disk_storage" {
+  description = "Storage pool for offsite backup root disk"
+  type        = string
+  default     = "local-lvm"
+}
+
+variable "offsite_backup_disk_size" {
+  description = "Root disk size in GB for offsite backup container"
+  type        = number
+  default     = 8
+}
+
+variable "offsite_backup_template_file_id" {
+  description = "Proxmox OS template file ID for offsite backup container"
+  type        = string
+  default     = "local:vztmpl/debian-12-standard_12.12-1_amd64.tar.zst"
+}
+
+variable "offsite_backup_network_bridge" {
+  description = "Network bridge interface for offsite backup container"
+  type        = string
+  default     = "vmbr0"
+}
+
+variable "offsite_backup_mac_address" {
+  description = "MAC address for offsite backup network interface"
+  type        = string
+  default     = "bc:24:11:00:06:02"
+}
+
+variable "offsite_backup_ipv4_address" {
+  description = "IPv4 address/CIDR or 'dhcp' for offsite backup"
+  type        = string
+  default     = "dhcp"
+}
+
+variable "offsite_backup_ipv4_gateway" {
+  description = "IPv4 default gateway for offsite backup (null if DHCP)"
+  type        = string
+  default     = null
+}
+
+variable "offsite_backup_vlan_id" {
+  description = "VLAN tag for offsite backup network interface"
+  type        = number
+  default     = null
+}
+
+variable "offsite_backup_ssh_public_keys" {
+  description = "List of SSH public keys for offsite backup container"
+  type        = list(string)
+  default     = []
+}
+
+variable "offsite_backup_unprivileged" {
+  description = "Whether offsite backup LXC is unprivileged. False (privileged) for NFS mounts"
+  type        = bool
+  default     = false
+}
+
+variable "offsite_backup_started" {
+  description = "Whether offsite backup LXC is started initially. False for on-demand worker"
+  type        = bool
+  default     = false
+}
+
+variable "offsite_backup_start_on_boot" {
+  description = "Whether offsite backup container starts automatically on hypervisor boot"
+  type        = bool
+  default     = false
+}
+
+variable "offsite_backup_tags" {
+  description = "Proxmox tags to apply to offsite backup container"
+  type        = list(string)
+  default     = ["backup", "cloud", "opentofu", "restic"]
+}
+
+variable "offsite_backup_mount_points" {
+  description = "List of storage bind mount points for offsite backup container"
+  type = list(object({
+    volume    = string
+    path      = string
+    read_only = optional(bool, true)
+  }))
+  default = []
+}
