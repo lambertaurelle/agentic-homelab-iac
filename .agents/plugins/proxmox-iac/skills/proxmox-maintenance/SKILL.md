@@ -21,6 +21,12 @@ Do **not** use for:
 - Troubleshooting a specific broken container or inspecting logs (use `proxmox-workload-debug`);
 - Scaffolding new application workloads (use `proxmox-scaffold-app`).
 
+## Execution Environment & Topology Awareness
+> [!IMPORTANT]
+> The agent executes inside the **Management Workspace (`mgmt-devops`, CT 900)**. Scripts in `scripts/` (`update-cluster-stack.sh`, `scheduled-reboot.sh`, etc.) automatically handle SSH transport to hypervisor nodes. When running ad-hoc hypervisor commands, always route via [`scripts/pve-exec.sh`](file:///root/homelab-iac/scripts/pve-exec.sh).
+
+---
+
 ## Core Process
 
 ### 1. Daily Cluster & Container Updates

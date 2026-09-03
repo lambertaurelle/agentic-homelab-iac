@@ -23,6 +23,39 @@ Both subagents are fully empowered with write tools and terminal execution permi
 | **`@proxmox-ops`** | `proxmox-ops` | - `proxmox-bootstrap`<br>- `proxmox-cluster-health`<br>- `proxmox-workload-debug`<br>- `proxmox-maintenance`<br>- `proxmox-offsite-backup` | - Day-0 cluster bootstrap & secrets setup<br>- Quorum audit, storage pool checks, DNS verification<br>- OpenTofu drift detection (`tofu plan`)<br>- Container crash loop, systemd journal, Docker log debug<br>- Daily updates, rolling reboots, VZDump backup/restore<br>- Managing offsite cloud backup targets, quota alerts & cloud restores |
 | **`@workload-architect`** | `workload-architect` | - `proxmox-scaffold-app` | - Deploying / scaffolding new applications or LXCs<br>- Authoring `tofu/ct-<app>.tf` and `stacks/<app>/docker-compose.yml`<br>- Sizing compute, RAM, storage, and GPU passthrough<br>- Configuring Watchtower push-to-main continuous deployment |
 
+---
+
+## 🏗️ Agent Execution Environment & Topology Awareness
+
+Agents must maintain strict self-awareness of where they execute within the homelab architecture:
+
+1. **Host Environment (`mgmt-devops` - CT 900)**:
+   - Antigravity agents execute inside the **Management Workspace container (`mgmt-devops`, CT 900)**, **NOT** directly on the bare-metal Proxmox hypervisors.
+   - **Local Tools Available**: OpenTofu (`tofu`), `git`, `gh`, `curl`, `jq`, `python3`, and repository management scripts (`scripts/`).
+   - **Hypervisor Tools NOT Present**: Proxmox hypervisor binaries (`pct`, `pvecm`, `pvesm`, `qm`, `pveam`) do **not** exist locally inside CT 900. Running `pct ...` directly in the local shell will fail with `command not found`.
+
+2. **Hypervisor Orchestration Pattern**:
+   - CT 900 possesses passwordless SSH root keys configured for all hypervisor nodes (`node-1` / `proxmox` and `node-2` / `tuxmox`).
+   - **Always route hypervisor commands through [`scripts/pve-exec.sh`](file:///root/homelab-iac/scripts/pve-exec.sh)** or direct passwordless SSH:
+     ```bash
+     # Correct: Use standardized wrapper (auto-detects local vs remote execution)
+     ./scripts/pve-exec.sh node-1 pct status 602
+     ./scripts/pve-exec.sh node-1 pvecm status
+     ./scripts/pve-exec.sh node-2 pct list
+
+     # Or via direct passwordless SSH:
+     ssh root@proxmox "pct status 602"
+     ```
+
+3. **Non-Destructive Backup Observability**:
+   - For all offsite cloud backup inspection and failure diagnosis, **never** attempt to mount filesystems or delete systemd units to inspect CT 602.
+   - Run the dedicated inspection tool:
+     ```bash
+     ./scripts/inspect-backup.sh [--tail 50] [--snapshots]
+     ```
+
+---
+
 ### Subagent Details
 
 #### 1. `@proxmox-ops` (Cluster SRE & Operations)

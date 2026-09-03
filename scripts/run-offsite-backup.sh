@@ -149,6 +149,7 @@ TOTAL_PROCESSED=0
 SUCCESS_COUNT=0
 FAIL_COUNT=0
 TARGETS_SUMMARY=""
+TARGETS_ERRORS=""
 
 # Extract enabled targets using Python
 TARGET_LIST=$(python3 -c "
@@ -203,7 +204,9 @@ while IFS='|' read -r t_name t_src t_excludes; do
             FAIL_COUNT=$((FAIL_COUNT + 1))
             TARGETS_SUMMARY="${TARGETS_SUMMARY}\n• ❌ **${t_name}**: Backup failed"
             echo "[-] Error backing up target '${t_name}':" >&2
-            tail -n 25 "${RESTIC_OUTPUT}" >&2 || true
+            ERR_SNIPPET=$(tail -n 15 "${RESTIC_OUTPUT}" | grep -v -E '^[[:space:]]*$' | head -n 8 || true)
+            echo "${ERR_SNIPPET}" >&2
+            TARGETS_ERRORS="${TARGETS_ERRORS}\n**${t_name}**:\n\`\`\`\n${ERR_SNIPPET}\n\`\`\`"
         fi
         rm -f "${RESTIC_OUTPUT}"
     fi
@@ -300,6 +303,9 @@ fields = [
     {'name': 'Remote Storage Quota', 'value': '${QUOTA_USED_HR} / ${QUOTA_TOTAL_HR} (${QUOTA_PERCENT}%)\nFree: ${QUOTA_FREE_HR}', 'inline': False},
     {'name': 'Dataset Breakdown', 'value': '''${TARGETS_SUMMARY}'''.strip() or 'None', 'inline': False}
 ]
+err_details = '''${TARGETS_ERRORS}'''.strip()
+if int('${FAIL_COUNT}') > 0 and err_details:
+    fields.append({'name': 'Error Details', 'value': err_details[:1000], 'inline': False})
 print(json.dumps(fields))
 ")
 

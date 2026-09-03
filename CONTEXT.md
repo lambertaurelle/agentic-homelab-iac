@@ -9,7 +9,7 @@ A dedicated containerized development environment running on compute infrastruct
 _Avoid_: Dev VM, dev box, builder
 
 **Management Workspace**:
-An unprivileged utility container (\`mgmt-devops\`) running OpenTofu, git, and administrative tooling to manage cluster infrastructure.
+An unprivileged utility container (`mgmt-devops`, CT 900) running OpenTofu, git, and administrative tooling to manage cluster infrastructure. Serves as the primary execution environment for Antigravity AI agents, orchestrating hypervisor nodes via passwordless SSH (`scripts/pve-exec.sh`).
 _Avoid_: Control node, admin server, bastard host
 
 **Remote Control Daemon**:

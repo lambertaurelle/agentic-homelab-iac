@@ -21,23 +21,30 @@ Do **not** use for:
 - Performing updates or reboots (use `proxmox-maintenance`);
 - Provisioning new workloads (use `proxmox-scaffold-app`).
 
+## Execution Environment & Topology Awareness
+> [!IMPORTANT]
+> The agent executes inside the **Management Workspace (`mgmt-devops`, CT 900)**. Proxmox hypervisor commands (`pvecm`, `pvesm`, `pvesh`) are not installed locally.
+> Always route hypervisor commands through [`scripts/pve-exec.sh`](file:///root/homelab-iac/scripts/pve-exec.sh) or direct passwordless SSH (`ssh root@<node>`).
+
+---
+
 ## Core Process
 
 ### 1. Cluster Membership & Quorum Audit
 Verify node communication and cluster quorum:
 ```bash
-# Check Corosync cluster status
-pvecm status 2>/dev/null || echo "Running on standalone single node"
+# Check Corosync cluster status on node-1
+./scripts/pve-exec.sh node-1 "pvecm status 2>/dev/null || echo 'Running on standalone single node'"
 
 # Check active nodes
-pvesh get /nodes --output-format json 2>/dev/null || true
+./scripts/pve-exec.sh node-1 "pvesh get /nodes --output-format json 2>/dev/null || true"
 ```
 
 ### 2. Storage Pool Connectivity
 Inspect health of all defined storage pools:
 ```bash
-# Audit storage pool states
-pvesm status
+# Audit storage pool states on node-1
+./scripts/pve-exec.sh node-1 pvesm status
 ```
 Verify that required storage pools report `active` status.
 
