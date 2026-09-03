@@ -202,7 +202,8 @@ while IFS='|' read -r t_name t_src t_excludes; do
         else
             FAIL_COUNT=$((FAIL_COUNT + 1))
             TARGETS_SUMMARY="${TARGETS_SUMMARY}\n• ❌ **${t_name}**: Backup failed"
-            echo "[-] Error backing up target '${t_name}'." >&2
+            echo "[-] Error backing up target '${t_name}':" >&2
+            tail -n 25 "${RESTIC_OUTPUT}" >&2 || true
         fi
         rm -f "${RESTIC_OUTPUT}"
     fi
