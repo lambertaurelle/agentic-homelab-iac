@@ -20,19 +20,26 @@ Do **not** use for:
 - Auditing cluster health or diagnosing bugs on existing containers (use `proxmox-cluster-health` or `proxmox-workload-debug`);
 - Scaffolding new application workloads (use `proxmox-scaffold-app`).
 
+## Execution Environment & Topology Awareness
+> [!IMPORTANT]
+> The agent executes inside the **Management Workspace (`mgmt-devops`, CT 900)**. Proxmox hypervisor commands (`pvesh`, `pvesm`, etc.) are not present locally.
+> Always route hypervisor discovery commands through [`scripts/pve-exec.sh`](file:///root/homelab-iac/scripts/pve-exec.sh) or direct passwordless SSH (`ssh root@<node>`).
+
+---
+
 ## Core Process
 
 ### 1. Environment & Hardware Discovery
-Inspect the local Proxmox environment to detect available nodes, storage pools, and network bridges:
+Inspect the Proxmox cluster environment to detect available nodes, storage pools, and network bridges:
 ```bash
-# Discover active cluster nodes
-pvesh get /nodes --output-format json 2>/dev/null || echo "Single node environment"
+# Discover active cluster nodes on node-1
+./scripts/pve-exec.sh node-1 "pvesh get /nodes --output-format json 2>/dev/null || echo 'Single node environment'"
 
 # Discover available storage pools (local-lvm, local-zfs, nfs)
-pvesm status 2>/dev/null || true
+./scripts/pve-exec.sh node-1 pvesm status 2>/dev/null || true
 
 # Discover network bridge configuration
-ip route show default 2>/dev/null || true
+./scripts/pve-exec.sh node-1 ip route show default 2>/dev/null || true
 ```
 
 ### 2. Configure Secrets & Environment

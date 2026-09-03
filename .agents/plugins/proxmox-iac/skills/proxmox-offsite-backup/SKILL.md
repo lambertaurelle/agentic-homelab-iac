@@ -23,14 +23,23 @@ Do **not** use for:
 
 ---
 
+## Execution Environment & Topology Awareness
+> [!IMPORTANT]
+> The agent executes inside the **Management Workspace (`mgmt-devops`, CT 900)**. Proxmox hypervisor commands (`pct`, `pvesm`, etc.) are not present locally.
+> Always route hypervisor commands through [`scripts/pve-exec.sh`](file:///root/homelab-iac/scripts/pve-exec.sh) (which targets `node-1` by default) or via direct passwordless SSH (`ssh root@<node>`).
+> For diagnosis and log review, **never** modify container filesystems or delete systemd units—always use [`scripts/inspect-backup.sh`](file:///root/homelab-iac/scripts/inspect-backup.sh).
+
+---
+
 ## Standard Execution Procedure
 
 Follow these sequential steps when managing offsite cloud backups:
 
-### Step 1: Inspect Status & Cloud Storage Quota
-Before making configuration changes or triggering a backup, audit the remote storage quota:
+### Step 1: Inspect Status, Failure Logs & Cloud Storage Quota
+Before making configuration changes or triggering a backup, perform a non-destructive audit:
 ```bash
-pct exec 602 -- rclone about offsite-remote:
+# Fast, prompt-free inspection (checks CT 602 state, journal logs, and quota without restarting)
+./scripts/inspect-backup.sh --tail 50
 ```
 Confirm that storage usage is below the warning threshold (`85%`).
 
@@ -50,38 +59,34 @@ Confirm that storage usage is below the warning threshold (`85%`).
    ```
 4. Verify target directory accessibility inside CT 602:
    ```bash
-   pct exec 602 -- manage-backup-targets verify
+   ./scripts/pve-exec.sh node-1 "pct start 602 && pct exec 602 -- manage-backup-targets verify && pct stop 602"
    ```
 
 ### Step 3: Trigger Differential Backup Execution
 Execute the differential cloud backup via the single idempotent command:
 ```bash
 # Start ephemeral worker or trigger service if already started:
-if pct status 602 2>/dev/null | grep -q 'running'; then
-    pct exec 602 -- systemctl start offsite-backup.service
-else
-    pct start 602
-fi
+./scripts/pve-exec.sh node-1 "if pct status 602 2>/dev/null | grep -q 'running'; then pct exec 602 -- systemctl start offsite-backup.service; else pct start 602; fi"
 ```
 The runner will stream modified chunks in RAM to cloud storage, prune retention (`keep-daily 3, keep-weekly 2`), audit quota, send a Discord report embed, and automatically power off the container upon completion.
 
-### Step 4: Verify Completion & Notification
-1. Monitor until container auto-powers off (or check journal logs if still active):
+### Step 4: Verify Completion & Snapshots
+1. Monitor until container auto-powers off:
    ```bash
    # Wait for clean ephemeral shutdown
-   while pct status 602 2>/dev/null | grep -q 'running'; do sleep 5; done
+   ./scripts/pve-exec.sh node-1 "while pct status 602 2>/dev/null | grep -q 'running'; do sleep 5; done"
    ```
-2. View recorded point-in-time snapshots (starts worker temporarily if powered off):
+2. View recorded point-in-time snapshots:
    ```bash
-   pct start 602 && pct exec 602 -- restic snapshots && pct stop 602
+   ./scripts/inspect-backup.sh --snapshots
    ```
 
 ### Step 5: Disaster Recovery & Restoration (When Needed)
 To recover data from cloud storage:
-1. Identify the desired snapshot ID using `pct exec 602 -- restic snapshots`.
+1. Identify the desired snapshot ID using `./scripts/inspect-backup.sh --snapshots`.
 2. Restore the target archive or directory:
    ```bash
-   pct exec 602 -- restic restore <SNAPSHOT_ID> --target /mnt/backup-source/nas-data/restored/
+   ./scripts/pve-exec.sh node-1 "pct start 602 && pct exec 602 -- restic restore <SNAPSHOT_ID> --target /mnt/backup-source/nas-data/restored/ && pct stop 602"
    ```
 
 ---
