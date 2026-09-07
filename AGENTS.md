@@ -22,7 +22,6 @@ Both subagents are fully empowered with write tools and terminal execution permi
 | :--- | :--- | :--- | :--- |
 | **`@proxmox-ops`** | `proxmox-ops` | - `proxmox-bootstrap`<br>- `proxmox-cluster-health`<br>- `proxmox-workload-debug`<br>- `proxmox-maintenance`<br>- `proxmox-offsite-backup` | - Day-0 cluster bootstrap & secrets setup<br>- Quorum audit, storage pool checks, DNS verification<br>- OpenTofu drift detection (`tofu plan`)<br>- Container crash loop, systemd journal, Docker log debug<br>- Daily updates, rolling reboots, VZDump backup/restore<br>- Managing offsite cloud backup targets, quota alerts & cloud restores |
 | **`@workload-architect`** | `workload-architect` | - `proxmox-scaffold-app` | - Deploying / scaffolding new applications or LXCs<br>- Authoring `tofu/ct-<app>.tf` and `stacks/<app>/docker-compose.yml`<br>- Sizing compute, RAM, storage, and GPU passthrough<br>- Configuring Watchtower push-to-main continuous deployment |
-| **`@haos-ops`** | `haos-ops` | - `haos-health`<br>- `haos-maintenance`<br>- `haos-config-ops`<br>- `haos-backup` | - Home Assistant OS status, health audits & unavailable entities<br>- Safe Core, OS, Supervisor & Add-on updates with pre-backup<br>- YAML syntax validation & hot-reloading automations/scripts<br>- Backup snapshot generation, restoration & NAS storage export |
 
 ---
 
@@ -94,24 +93,11 @@ Agents must maintain strict self-awareness of where they execute within the home
   }
   ```
 
-#### 3. `@haos-ops` (Home Assistant OS SRE & Automation Operations - Instance Overlay)
-- **TypeName**: `haos-ops`
-- **Definition**: `.agents/instance/agents/haos-ops.md` (symlinked in `.agents/agents/haos-ops.md`)
-- **Capabilities**: Planning, writing files, executing HAOS CLI commands (`ha`, `docker`, `scripts/instance/ha-exec.sh`), and REST API queries (`scripts/instance/ha-api.sh`).
-- **Invocation Example**:
-  ```json
-  {
-    "TypeName": "haos-ops",
-    "Role": "Home Assistant OS SRE & Ops",
-    "Prompt": "Run a health audit on Home Assistant OS, inspect unavailable entities, and check for pending updates."
-  }
-  ```
-
 ---
 
 ## 📦 Agent Plugins & Skills
 
-Customizations are packaged as standard plugins under `.agents/plugins/` (baseline) and `.agents/instance/plugins/` (private instance overlay):
+Customizations are packaged as standard plugins under `.agents/plugins/`:
 
 ### 1. `proxmox-iac` Plugin (`.agents/plugins/proxmox-iac/`)
 - **`proxmox-bootstrap`**: Day-0 interactive cluster discovery, secrets generation, baseline OpenTofu apply, and service setup.
@@ -121,13 +107,7 @@ Customizations are packaged as standard plugins under `.agents/plugins/` (baseli
 - **`proxmox-maintenance`**: Daily updates engine, rolling reboots with peer node checks, and VZDump backup/restore routines.
 - **`proxmox-offsite-backup`**: Automated differential offsite cloud backup management (pCloud, S3, B2 via Restic + Rclone), backup target management (`manage-backup-targets.sh`), remote quota auditing, and cloud restorations.
 
-### 2. `haos-iac` Plugin (`.agents/instance/plugins/haos-iac/`)
-- **`haos-health`**: Comprehensive health check, Core/Supervisor/Host status, disk usage, error logs, and unavailable entity audit.
-- **`haos-maintenance`**: Safe Core, OS, Supervisor, and Add-on upgrades with mandatory pre-flight backup snapshot and config check.
-- **`haos-config-ops`**: YAML configuration syntax check, safe file edits with backup revert guard, and zero-downtime hot reloads.
-- **`haos-backup`**: Snapshot creation, storage monitoring, retention pruning, and NAS backup sync.
-
-### 3. `meta-skills` Plugin (`.agents/plugins/meta-skills/`)
+### 2. `meta-skills` Plugin (`.agents/plugins/meta-skills/`)
 - **`skill-creator`**: Author, structure, and test new agent skills compliant with the agentskills.io spec.
 - **`skill-evaluator`**: Audit, score, and lint existing agent skills against best practices.
 
