@@ -168,9 +168,8 @@ jobs:
    # Run the universal Docker installer inside the newly provisioned LXC
    pct exec <CTID> -- bash -c "$(curl -fsSL https://.../bootstrap-docker-host.sh)"
    ```
-3. **Start the Stack**:
+3. **Reconcile & Deploy Stack Declaratively**:
    ```bash
-   # Copy stack folder and start Compose
-   cd /root/homelab-iac/stacks/myapp
-   docker compose up -d
+   # Converge container state to Git-declared stack definition
+   ./scripts/reconcile-stacks.sh --app myapp
    ```

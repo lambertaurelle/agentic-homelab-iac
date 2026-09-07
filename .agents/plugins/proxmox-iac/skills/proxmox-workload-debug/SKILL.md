@@ -69,9 +69,10 @@ Check listening ports and container networking:
 
 ### 5. Propose & Apply Remediation
 Based on the root cause identified (OOM, missing volume, permission mapping, port collision):
-- Adjust memory/cores in `tofu/` or via `pct set "$CTID" -memory <MB>`.
-- Fix Docker Compose environment variables in `stacks/instance/<app>/.env` (or `stacks/<app>/.env`).
-- Restart service: `pct exec "$CTID" -- systemctl restart <service>` or `pct reboot "$CTID"`.
+- Adjust memory/cores declaratively in `tofu/ct-<app>.tf` and apply via `tofu apply` (never use imperative `pct set`).
+- Fix Docker Compose configurations in `stacks/instance/<app>/` (or `stacks/<app>/`) in Git and converge declaratively via [`./scripts/reconcile-stacks.sh --app <app>`](file:///root/homelab-iac/scripts/reconcile-stacks.sh).
+- Restart systemd services if needed: `pct exec "$CTID" -- systemctl restart <service>`.
+- To stop/start workloads, declare `started = false|true` in `tofu/ct-<app>.tf` and run `tofu apply`.
 
 ## Verification
 Confirm the troubleshooting session is complete only when:

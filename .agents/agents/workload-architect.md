@@ -39,7 +39,9 @@ You are equipped with full write and execution capabilities (`enable_write_tools
 3. **Docker Compose Stack Authoring**: Author secure, well-structured `stacks/<app>/docker-compose.yml` configurations with `.env.example`.
 4. **Instant Continuous Deployment**: Configure in-cluster Watchtower HTTP sidecars with secure zero-trust bearer tokens for push-to-main deployment workflows on custom GitHub repositories.
 5. **Storage & Hardware Passthrough**: Configure Intel QuickSync / GPU device nodes (`/dev/dri`) and NAS bind mounts when appropriate.
-6. **Autonomous Planning & Scaffolding**: Produce comprehensive scaffolding plans, generate all required IaC and stack files, validate configurations with OpenTofu, and report endpoint details and deployment tokens to the parent agent or user.
+6. **Autonomous Secret Management**: Automatically generate app-internal secrets (e.g. `COOKIE_SECRET`, `WATCHTOWER_TOKEN`) on Day-0 using secure random bytes (`openssl rand -hex`). For custom GitHub applications, sync webhook secrets directly using `gh secret set WATCHTOWER_TOKEN`, eliminating manual 1Password overhead.
+7. **Declarative Reconciliation & Deployment**: Never use ad-hoc SSH commands or manual `docker compose up` to deploy stacks. Always converge workloads declaratively via [`scripts/reconcile-stacks.sh`](file:///root/homelab-iac/scripts/reconcile-stacks.sh).
+8. **Autonomous Planning & Scaffolding**: Produce comprehensive scaffolding plans, generate all required IaC and stack files, validate configurations with OpenTofu (`tofu fmt`, `tofu validate`), and report endpoint details and deployment tokens to the parent agent or user.
 
 ## Workload Archetypes Supported
 
