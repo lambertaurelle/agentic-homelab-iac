@@ -34,7 +34,7 @@ From the management workspace (`CT 900`) or repository root:
 # Interactive mode (prompts for type, name, node, port)
 ./scripts/scaffold-app.sh
 
-# Non-interactive CLI command
+# Non-interactive CLI command (Core Baseline)
 ./scripts/scaffold-app.sh \
     --type custom \
     --name custom-api \
@@ -44,6 +44,16 @@ From the management workspace (`CT 900`) or repository root:
     --memory 2048 \
     --cores 2 \
     --disk 20 \
+    --non-interactive
+
+# Non-interactive CLI command (Private Instance Workload)
+./scripts/scaffold-app.sh \
+    --type custom \
+    --name private-api \
+    --node node-2 \
+    --repo youruser/private-api \
+    --port 3000 \
+    --instance \
     --non-interactive
 ```
 
@@ -57,7 +67,9 @@ Ask the agent:
 
 When scaffolding an application named `myapp`, the scaffolder automatically produces:
 
-### 1. OpenTofu LXC Definition (`tofu/ct-myapp.tf`)
+### 1. OpenTofu LXC Definition (`tofu/ct-myapp.tf` or `tofu/instance-ct-myapp.tf`)
+> 💡 For private instance workloads (`--instance`), containers are defined in `tofu/instance-ct-<app>.tf` and Docker stacks in `stacks/instance/<app>/` to guarantee they remain excluded from upstream by `.gitignore`.
+
 ```hcl
 module "ct_myapp" {
   source = "./modules/app-container"

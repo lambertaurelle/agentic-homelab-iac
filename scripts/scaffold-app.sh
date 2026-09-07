@@ -30,10 +30,19 @@ APP_CTID=""
 APP_IP="dhcp"
 DRY_RUN=false
 INTERACTIVE=true
+IS_INSTANCE=""
 
 # Parse CLI flags
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --instance)
+            IS_INSTANCE=true
+            shift
+            ;;
+        --core|--no-instance)
+            IS_INSTANCE=false
+            shift
+            ;;
         --type|-t)
             WORKLOAD_TYPE="$2"
             INTERACTIVE=false
@@ -99,6 +108,8 @@ while [[ $# -gt 0 ]]; do
             echo "  --ip <ip/cidr|dhcp>                 Static IPv4 with CIDR or 'dhcp' (default: dhcp)"
             echo "  --dry-run                           Simulate file creation without writing to disk"
             echo "  --non-interactive                   Run non-interactively with provided flags"
+            echo "  --instance                          Scaffold as private instance workload (tofu/instance-ct-*.tf & stacks/instance/)"
+            echo "  --core                              Scaffold as core baseline workload (tofu/ct-*.tf & stacks/)"
             echo "  -h, --help                          Show this help message"
             exit 0
             ;;
@@ -134,7 +145,7 @@ if [ "$INTERACTIVE" = true ]; then
         read -r -p "Enter application name (e.g. my-service): " APP_NAME
     fi
 
-    read -r -p "Target Proxmox node [node-1/node-2] (default: node-2): " node_choice
+    read -r -p "Target Proxmox node [node-1/node-2] (default: ${TARGET_NODE}): " node_choice
     TARGET_NODE="${node_choice:-${TARGET_NODE}}"
 
     if [ -z "${APP_NAME}" ]; then
@@ -146,11 +157,25 @@ if [ "$INTERACTIVE" = true ]; then
         read -r -p "GitHub repo slug or container image (e.g. lambertaurelle/${APP_NAME}): " APP_REPO
     fi
 
-    read -r -p "Target Proxmox node [node-2/node-1] (default: node-2): " node_choice
-    TARGET_NODE="${node_choice:-${TARGET_NODE}}"
-
     read -r -p "Primary application port (default: ${APP_PORT}): " port_choice
     APP_PORT="${port_choice:-${APP_PORT}}"
+
+    if [ -z "$IS_INSTANCE" ] && [ -d "${REPO_ROOT}/stacks/instance" ]; then
+        read -r -p "Is this a private instance workload? [Y/n] (default: y): " instance_choice
+        case "${instance_choice:-y}" in
+            [nN]*) IS_INSTANCE=false ;;
+            *) IS_INSTANCE=true ;;
+        esac
+    fi
+fi
+
+# Resolve instance vs core baseline mode if not explicitly set
+if [ -z "$IS_INSTANCE" ]; then
+    if [ -d "${REPO_ROOT}/stacks/instance" ]; then
+        IS_INSTANCE=true
+    else
+        IS_INSTANCE=false
+    fi
 fi
 
 # Normalize application name (lowercase alphanumeric with hyphens)
@@ -188,9 +213,16 @@ echo "[+] MAC:      ${APP_MAC}"
 echo "[+] Memory:   ${APP_MEMORY} MB | Cores: ${APP_CORES} | Disk: ${APP_DISK} GB"
 
 # ------------------------------------------------------------------------------
-# 3. Generate OpenTofu Resource (tofu/ct-<app>.tf)
+# 3. Generate OpenTofu Resource & Resolve Directory Targets
 # ------------------------------------------------------------------------------
-TOFU_FILE="${REPO_ROOT}/tofu/ct-${APP_NAME}.tf"
+if [ "${IS_INSTANCE}" = true ]; then
+    TOFU_FILE="${REPO_ROOT}/tofu/instance-ct-${APP_NAME}.tf"
+    STACK_DIR="${REPO_ROOT}/stacks/instance/${APP_NAME}"
+else
+    TOFU_FILE="${REPO_ROOT}/tofu/ct-${APP_NAME}.tf"
+    STACK_DIR="${REPO_ROOT}/stacks/${APP_NAME}"
+fi
+
 TOFU_CONTENT=$(cat <<TOFU_EOF
 # ==============================================================================
 # ${APP_NAME} LXC Container
@@ -223,11 +255,6 @@ TOFU_EOF
 # ------------------------------------------------------------------------------
 # 4. Generate Docker Compose Stack & Workflows
 # ------------------------------------------------------------------------------
-if [ -d "${REPO_ROOT}/stacks/instance" ]; then
-    STACK_DIR="${REPO_ROOT}/stacks/instance/${APP_NAME}"
-else
-    STACK_DIR="${REPO_ROOT}/stacks/${APP_NAME}"
-fi
 COMPOSE_FILE="${STACK_DIR}/docker-compose.yml"
 ENV_FILE="${STACK_DIR}/.env.example"
 SNIPPET_FILE="${STACK_DIR}/github-deploy-workflow.yml.snippet"
@@ -389,11 +416,11 @@ echo "==========================================================================
 echo "[+] Successfully scaffolded workload: ${APP_NAME}!"
 echo "=============================================================================="
 echo "Created files:"
-echo "  - OpenTofu Config:  tofu/ct-${APP_NAME}.tf"
-echo "  - Docker Compose:   stacks/${APP_NAME}/docker-compose.yml"
-echo "  - Environment:      stacks/${APP_NAME}/.env.example"
+echo "  - OpenTofu Config:  ${TOFU_FILE#"${REPO_ROOT}/"}"
+echo "  - Docker Compose:   ${COMPOSE_FILE#"${REPO_ROOT}/"}"
+echo "  - Environment:      ${ENV_FILE#"${REPO_ROOT}/"}"
 if [ "${WORKLOAD_TYPE}" = "custom" ]; then
-    echo "  - CI/CD Snippet:    stacks/${APP_NAME}/github-deploy-workflow.yml.snippet"
+    echo "  - CI/CD Snippet:    ${SNIPPET_FILE#"${REPO_ROOT}/"}"
 fi
 echo ""
 echo "Next Steps:"

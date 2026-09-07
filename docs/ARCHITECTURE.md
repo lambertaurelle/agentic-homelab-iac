@@ -50,10 +50,12 @@ graph TB
     CT602 -.->|Streaming Encrypted Chunks| CloudRemote
 ```
 
-> 💡 **Instance-Specific Private Overlays**: Custom hardware configurations, personal container stacks, and specialized scripts reside in dedicated `instance/` subdirectories (ignored on the public starter template):
-> - **Documentation Overlay ([`docs/instance/`](instance/))**: [Physical Node Specs](instance/TOPOLOGY.md), [Container Inventory & Allocation Matrix](instance/INVENTORY.md), and [Storage & Backup Schedules](instance/STORAGE_AND_BACKUPS.md).
+> 💡 **Instance-Specific Private Overlays**: Custom hardware configurations, personal container stacks, and specialized scripts reside in dedicated `instance/` subdirectories or `instance-` prefixes (ignored on the public starter template):
+> - **Documentation & Agent Overlay ([`docs/instance/`](instance/))**: [Physical Node Specs](instance/TOPOLOGY.md), [Container Inventory & Allocation Matrix](instance/INVENTORY.md), [Storage & Backup Schedules](instance/STORAGE_AND_BACKUPS.md), and [Instance Subagents Registry](instance/AGENTS.md).
+> - **OpenTofu Container Overlay (`tofu/instance-ct-*.tf`)**: Private LXC container definitions.
 > - **Stacks Overlay ([`stacks/instance/`](../stacks/instance/))**: Private Docker Compose stacks (e.g. Vaultwarden, Media Server, Custom App).
-> - **Scripts Overlay ([`scripts/instance/`](../scripts/instance/))**: Custom host installer scripts (e.g. GPU device passthrough, standalone native services).
+> - **Scripts Overlay ([`scripts/instance/`](../scripts/instance/))**: Custom host installer scripts and maintenance hooks.
+> - **AI Agents & Skills Overlay (`.agents/instance/`)**: Private subagent definitions (`agents/`) and hardware plugins (`plugins/`).
 
 ---
 
