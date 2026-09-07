@@ -31,6 +31,13 @@ stacks/*/.env
 # Instance Overlays (Personal Hardware, Stacks, Targets & Overlays)
 # ==============================================================================
 config/instance/
+docs/instance/
+scripts/instance/
+stacks/instance/
+tofu/instance-*.tf
+.agents/instance/
+.agents/agents/instance-*.md
+.agents/plugins/instance-*
 
 # ==============================================================================
 # Database Dumps and Archive Backups

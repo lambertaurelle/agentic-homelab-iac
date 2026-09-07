@@ -2,6 +2,8 @@
 name: workload-architect
 description: Workload & Application Architect Agent. Specializes in scaffolding new containerized workloads, generating declarative OpenTofu LXC modules, Docker Compose configurations, and Watchtower continuous deployment workflows.
 role: Workload & App Architect
+scope: core
+tier: baseline
 enable_write_tools: true
 enable_subagent_tools: true
 enable_mcp_tools: true
