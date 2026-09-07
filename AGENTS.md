@@ -23,6 +23,10 @@ Both subagents are fully empowered with write tools and terminal execution permi
 | **`@proxmox-ops`** | `proxmox-ops` | - `proxmox-bootstrap`<br>- `proxmox-cluster-health`<br>- `proxmox-workload-debug`<br>- `proxmox-maintenance`<br>- `proxmox-offsite-backup` | - Day-0 cluster bootstrap & secrets setup<br>- Quorum audit, storage pool checks, DNS verification<br>- OpenTofu drift detection (`tofu plan`)<br>- Container crash loop, systemd journal, Docker log debug<br>- Daily updates, rolling reboots, VZDump backup/restore<br>- Managing offsite cloud backup targets, quota alerts & cloud restores |
 | **`@workload-architect`** | `workload-architect` | - `proxmox-scaffold-app` | - Deploying / scaffolding new applications or LXCs<br>- Authoring `tofu/ct-<app>.tf` and `stacks/<app>/docker-compose.yml`<br>- Sizing compute, RAM, storage, and GPU passthrough<br>- Configuring Watchtower push-to-main continuous deployment |
 
+> [!NOTE]
+> **Private Instance Subagents Overlay**:
+> When operating in an environment with private instance overlays (e.g. standalone hardware nodes, custom home automation), additional specialized subagents are documented in [`docs/instance/AGENTS.md`](file:///root/homelab-iac/docs/instance/AGENTS.md). Refer to that registry for instance-specific subagent capabilities and routing.
+
 ---
 
 ## 🏗️ Agent Execution Environment & Topology Awareness
@@ -97,7 +101,7 @@ Agents must maintain strict self-awareness of where they execute within the home
 
 ## 📦 Agent Plugins & Skills
 
-Customizations are packaged as standard plugins under `.agents/plugins/`:
+Customizations are packaged as standard plugins under `.agents/plugins/` (baseline) and `.agents/instance/plugins/` (private instance overlay, documented in [`docs/instance/AGENTS.md`](file:///root/homelab-iac/docs/instance/AGENTS.md)):
 
 ### 1. `proxmox-iac` Plugin (`.agents/plugins/proxmox-iac/`)
 - **`proxmox-bootstrap`**: Day-0 interactive cluster discovery, secrets generation, baseline OpenTofu apply, and service setup.
@@ -118,15 +122,22 @@ Customizations are packaged as standard plugins under `.agents/plugins/`:
 1. **Alignment & Planning**: Before starting complex tasks, use `/grill-me` to align on requirements and architecture.
 2. **Specialized Delegation**: The main agent must immediately delegate cluster operations to `@proxmox-ops` (`TypeName: "proxmox-ops"`) and application onboarding to `@workload-architect` (`TypeName: "workload-architect"`).
 3. **Skill Evolution**: When building new administrative workflows, author a new skill using `skill-creator` backed by idempotent shell scripts in `scripts/`, then validate it with `skill-evaluator`.
-4. **Instance Overlay & Decoupled Architecture**:
-   - **Public Core Baseline**: Root directories (`tofu/`, `stacks/monitoring/`, `scripts/`) house the pristine, generic starter template.
-   - **Private Instance Overlays**: Personal hypervisor topology (`docs/instance/`), private application stacks (`stacks/instance/`), and custom host provisioners/hooks (`scripts/instance/`) are maintained for instance-specific needs.
+4. **Instance Overlay & Decoupled Architecture (Zero Upstream Leak Invariant)**:
+   - **Public Core Baseline (`scope: core`)**: Root directories (`tofu/`, `stacks/monitoring/`, `scripts/`, `.agents/agents/`, `.agents/plugins/`) house the pristine, generic starter template.
+   - **Private Instance Overlays (`scope: instance`)**: Dedicated to personal hardware, standalone nodes, and private stacks. Standardized naming and storage conventions MUST be strictly followed:
+     - OpenTofu Containers: `tofu/instance-ct-<app>.tf` (prefixed with `instance-ct-`)
+     - Docker Compose Stacks: `stacks/instance/<app>/`
+     - Host Scripts & Hooks: `scripts/instance/<script>.sh`
+     - Topology & Hardware Docs: `docs/instance/<doc>.md`
+     - Instance Agents & Registry: `docs/instance/AGENTS.md` and `.agents/instance/agents/<name>.md`
+     - Plugins & Skills: `.agents/instance/plugins/<plugin>/`
+   - **Frontmatter Declaration**: All agent definitions MUST specify `scope: core` (upstream eligible) or `scope: instance` (strictly private).
    - **Hook Extension Model**: Core automation scripts (`bootstrap-secrets.sh`, `update-cluster-stack.sh`, `restore-all-lxc.sh`) automatically invoke extension hooks in `scripts/instance/` if present.
 5. **Execution & Remote Hygiene**:
-   - `origin` (`homelab-iac`) is the private development remote (tracks all `instance/` files).
-   - `upstream` (`agentic-homelab-iac`) is the public, hardened reference repository (ignores `instance/` personal contents via `.gitignore`).
+   - `origin` (`homelab-iac`) is the private development remote (tracks all `instance/` files and `instance-` assets).
+   - `upstream` (`agentic-homelab-iac`) is the public, hardened reference repository. Its `.gitignore` strictly ignores all `instance/` directories and `instance-` prefixed files.
+   - **Zero Upstream Leak Invariant**: Never stage or push any file with `scope: instance`, located inside `*/instance/*`, or matching `instance-*` to `upstream`.
    - Pushes to `upstream main` are protected: force-pushes (`--force`) and branch deletions are strictly rejected.
-   - Always run pre-commit hooks, `tofu fmt`, and secret scanning before pushing to `upstream`.
    - External community contributions arrive via Pull Requests targeting `main` and must pass CI validation.
 6. **Declarative Primacy Discipline**:
    - Never mutate live infrastructure out-of-band and catch up code afterwards.

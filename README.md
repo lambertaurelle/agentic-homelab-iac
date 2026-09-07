@@ -216,7 +216,9 @@ gitGraph
    ```
 3. **Document your personal hardware & inventory**:
    Maintain your private hardware profiles, static IP tables, and storage mount mappings under [`docs/instance/`](docs/instance/).
-4. **Contribute new generic skills/scripts**:
+4. **Isolate Private Instance Assets**:
+   All instance-specific files follow the standardized `instance/` path or `instance-` prefix (`docs/instance/`, `scripts/instance/`, `stacks/instance/`, `tofu/instance-ct-*.tf`, `.agents/instance/`). They are automatically excluded by `.gitignore` from upstream contributions.
+5. **Contribute new generic skills/scripts**:
    ```bash
    git checkout -b feat/new-backup-skill upstream/main
    # (author clean generic script/skill)
@@ -245,6 +247,8 @@ agentic-homelab-iac/
 │               ├── proxmox-scaffold-app/   # Workload onboarding & sizing
 │               ├── proxmox-maintenance/    # Rolling updates & reboots
 │               └── proxmox-offsite-backup/ # Automated differential cloud backup & quota audits
+│   ├── plugins.json                # Standardized Antigravity plugin manifest
+│   └── instance/                   # (Private Overlay) Instance subagents, plugins & skills
 ├── AGENTS.md                       # Subagent delegation registry & repository memory
 ├── CONTRIBUTING.md                 # Community contributing guidelines & PR workflow
 ├── LICENSE                         # Apache 2.0 Open Source License
@@ -258,7 +262,7 @@ agentic-homelab-iac/
 │   ├── HOMELAB_APP_ONBOARDING_GUIDE.md # Workload scaffolding & onboarding runbook
 │   ├── MAINTENANCE.md              # Operations guide, update engine & rolling reboots
 │   ├── SECURITY_EXCEPTIONS.md      # DevSecOps risk acceptance register
-│   └── instance/                   # Private instance overlay (topology, hardware, inventory)
+│   └── instance/                   # Private instance overlay (topology, hardware, inventory, AGENTS.md)
 ├── scripts/
 │   ├── bootstrap-docker-host.sh    # Day-0 Docker installer inside LXC
 │   ├── bootstrap-secrets.sh        # Generates terraform.tfvars from secrets.env
@@ -286,6 +290,7 @@ agentic-homelab-iac/
     ├── ct-cloudflared.tf           # Core Cloudflare Tunnel LXC definition (CT 510)
     ├── ct-monitoring.tf            # Core Uptime Kuma LXC definition (CT 601)
     ├── ct-offsite-backup.tf        # Core Offsite Cloud Backup LXC definition (CT 602)
+    ├── instance-ct-*.tf            # (Private Overlay) Custom container definitions
     ├── outputs.tf                  # Infrastructure outputs
     ├── providers.tf                # OpenTofu bpg/proxmox provider
     ├── terraform.tfvars.example    # Variables configuration template
