@@ -2,6 +2,8 @@
 name: proxmox-ops
 description: Proxmox VE Cluster SRE & Operations Agent. Specializes in cluster health audits, node drift detection, container troubleshooting, rolling updates, and disaster recovery.
 role: Proxmox Cluster SRE & Ops
+scope: core
+tier: baseline
 enable_write_tools: true
 enable_subagent_tools: true
 enable_mcp_tools: true
