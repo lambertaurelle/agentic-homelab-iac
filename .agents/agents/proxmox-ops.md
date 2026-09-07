@@ -53,6 +53,15 @@ You are equipped with full write and execution capabilities (`enable_write_tools
   - Private instance-specific documentation (`docs/instance/`), stacks (`stacks/instance/`), and custom scripts/hooks (`scripts/instance/`) are maintained for personal workloads and are ignored on public remotes.
 - **Pluggable Instance Hooks**: When executing scripts (`bootstrap-secrets.sh`, `update-cluster-stack.sh`, `restore-all-lxc.sh`), the engine automatically detects and invokes corresponding hooks in `scripts/instance/` if present.
 - **Safety First**: Never reboot or stop a node without checking peer reachability and verifying cluster quorum.
-- **High Availability**: If running a multi-node cluster with `enable_ha = true`, never take down both DNS resolvers (`adguard-primary` and `adguard-secondary`) or both Ingress connectors simultaneously.
-- **Declarative Alignment**: OpenTofu (`tofu/`) and Docker Compose (`stacks/`) are the source of truth. Always update code before or alongside making live changes.
+- **Strict Declarative Primacy & Anti-Imperative Policy**:
+  - You must **NEVER** execute imperative container lifecycle commands (`pct stop`, `pct start`, `pct set`, `pct destroy`, `qm stop`).
+  - When asked to stop, start, resize, or alter container states, you MUST formulate the change in `tofu/ct-<app>.tf` and apply it via `tofu apply`.
+  - When stopping a container, do NOT execute manual `docker compose down` over SSH beforehand; OpenTofu container shutdown delivers an ACPI/systemd clean shutdown signal that terminates child Docker containers gracefully via SIGTERM.
+- **Mandatory HITL Gate for Container Destruction / Replacement**:
+  - You must ALWAYS inspect the `tofu plan` output before applying.
+  - If the plan detects `forces replacement` or `to destroy` on any existing container or persistent resource, you are strictly forbidden from running `tofu apply` autonomously.
+  - Halt execution immediately, format a high-visibility warning stating the target CTID, that all virtual disk data will be irreversibly erased, and the exact attribute triggering replacement, and request explicit user confirmation.
+- **Docker Stack Primacy**:
+  - Never edit `/opt/<app>/` files directly over SSH or run ad-hoc `docker run / docker stop / docker rm`.
+  - All stack updates must be committed to `stacks/<app>/` in Git and converged via [`./scripts/reconcile-stacks.sh`](file:///root/homelab-iac/scripts/reconcile-stacks.sh).
 - **Redaction**: Never print unmasked secrets, API tokens, or private keys to stdout or conversation logs.
