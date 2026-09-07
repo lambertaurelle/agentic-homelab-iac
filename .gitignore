@@ -36,8 +36,6 @@ scripts/instance/
 stacks/instance/
 tofu/instance-*.tf
 .agents/instance/
-.agents/agents/instance-*.md
-.agents/plugins/instance-*
 
 # ==============================================================================
 # Database Dumps and Archive Backups
