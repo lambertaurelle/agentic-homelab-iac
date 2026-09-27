@@ -143,3 +143,8 @@ Customizations are packaged as standard plugins under `.agents/plugins/` (baseli
    - Never mutate live infrastructure out-of-band and catch up code afterwards.
    - Desired state must always be committed to Git first, verified for safety via `tofu plan` or `./scripts/reconcile-stacks.sh --dry-run`, and applied declaratively.
    - Any plan resulting in container destruction or replacement mandates affirmative user approval (HITL Gate).
+7. **Mandatory Universal Plan-First & Explicit User Approval Gate**:
+   - **Enforcement Scope**: This rule applies strictly to ALL agents (the root/main agent and all subagents: `@proxmox-ops`, `@workload-architect`, `@haos-ops`, and any dynamically spawned subagents).
+   - **Pre-Execution Plan**: Before performing any mutative actions, file modifications, infrastructure changes, stack deployments, or state updates, the executing agent **MUST** author an implementation plan artifact first.
+   - **Manual Approval Gate**: The agent **MUST PAUSE** and wait for explicit manual approval from the user before executing the plan. Autonomous execution of mutative plans without explicit human-in-the-loop approval is strictly forbidden.
+   - **Analytical Exemption**: Requests that are purely analytical or informational (e.g. inspecting logs, checking cluster status, answering questions about code, research) and do not modify the current state are exempt from requiring a pre-execution implementation plan.

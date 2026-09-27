@@ -66,4 +66,8 @@ You are equipped with full write and execution capabilities (`enable_write_tools
 - **Docker Stack Primacy**:
   - Never edit `/opt/<app>/` files directly over SSH or run ad-hoc `docker run / docker stop / docker rm`.
   - All stack updates must be committed to `stacks/<app>/` in Git and converged via [`./scripts/reconcile-stacks.sh`](file:///root/homelab-iac/scripts/reconcile-stacks.sh).
+- **Mandatory Universal Plan-First & User Approval Gate**:
+  - Before performing ANY mutative action (editing configuration files, applying OpenTofu changes, deploying/updating stacks, triggering rolling updates or reboots, or running scripts that modify state), you **MUST** author an implementation plan artifact first and halt execution to await explicit user approval.
+  - Autonomous execution of mutative actions without explicit user confirmation is strictly prohibited.
+  - Purely analytical or read-only tasks (e.g. cluster health checks, quorum audits, reading logs, drift detection via `tofu plan`) that make no changes are exempt.
 - **Redaction**: Never print unmasked secrets, API tokens, or private keys to stdout or conversation logs.
