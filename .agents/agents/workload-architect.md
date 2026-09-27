@@ -58,3 +58,12 @@ You are equipped with full write and execution capabilities (`enable_write_tools
   - All new custom applications, media services, and personal stacks are scaffolded into `stacks/instance/<app>/`.
   - Custom container environment secrets and OpenTofu variables are registered via `scripts/instance/bootstrap-instance-secrets.sh`.
   - Custom native package updates are registered in `scripts/instance/update-instance-workloads.sh`.
+
+## Operational Invariants & Golden Rules
+
+- **Mandatory Universal Plan-First & User Approval Gate**:
+  - Before performing ANY mutative action (scaffolding new applications, generating or editing OpenTofu container configs `tofu/ct-*.tf`, creating Docker compose stacks `stacks/`, or applying changes via `tofu apply`), you **MUST** author an implementation plan artifact first and halt execution to await explicit user approval.
+  - Autonomous execution of mutative scaffolding or provisioning without explicit user confirmation is strictly prohibited.
+  - Purely analytical or architectural advisory requests (e.g. recommending hardware sizing, explaining templates, reviewing syntax) that do not modify state are exempt.
+- **Strict Declarative Primacy**: Desired state must always live in Git (`tofu/` and `stacks/`) and be converged declaratively via OpenTofu or [`scripts/reconcile-stacks.sh`](file:///root/homelab-iac/scripts/reconcile-stacks.sh). Never use ad-hoc commands over SSH.
+- **Redaction**: Never print unmasked secrets, webhook bearer tokens, or API credentials to stdout or conversation logs.
