@@ -18,8 +18,17 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
+# Source shared library if available
+if [ -f "${SCRIPT_DIR}/lib/common.sh" ]; then
+    # shellcheck disable=SC1091
+    . "${SCRIPT_DIR}/lib/common.sh"
+fi
+
 # Source secrets/configuration if present
-if [ -f "${REPO_ROOT}/homelab-secrets.env" ]; then
+if [ -f "${REPO_ROOT}/secrets.env" ]; then
+    # shellcheck disable=SC1091
+    . "${REPO_ROOT}/secrets.env"
+elif [ -f "${REPO_ROOT}/homelab-secrets.env" ]; then
     # shellcheck disable=SC1091
     . "${REPO_ROOT}/homelab-secrets.env"
 fi
@@ -134,58 +143,76 @@ resolve_stack_metadata() {
         return 1
     fi
 
-    # Known application mappings
-    case "${app}" in
-        monitoring)
-            ctid="901"
-            node_name="node-1"
-            node_ip="${NODE1_HOST}"
-            ;;
-        offsite-backup)
-            ctid="602"
-            node_name="node-1"
-            node_ip="${NODE1_HOST}"
-            ;;
-        seedbox)
-            ctid="201"
-            node_name="node-2"
-            node_ip="${NODE2_HOST}"
-            ;;
-        immich)
-            ctid="301"
-            node_name="node-2"
-            node_ip="${NODE2_HOST}"
-            ;;
-        teamspeak)
-            ctid="401"
-            node_name="node-2"
-            node_ip="${NODE2_HOST}"
-            ;;
-        lecuchon)
-            ctid="701"
-            node_name="node-2"
-            node_ip="${NODE2_HOST}"
-            ;;
-        workspace-sync)
-            ctid="702"
-            node_name="node-2"
-            node_ip="${NODE2_HOST}"
-            ;;
-        *)
-            # Fallback: scan tofu/ct-${app}.tf for vm_id and node_name
-            local tf_file="${REPO_ROOT}/tofu/ct-${app}.tf"
-            if [ -f "${tf_file}" ]; then
-                ctid=$(grep -E 'vm_id\s*=' "${tf_file}" | head -n1 | grep -o '[0-9]\+' || true)
-                if grep -q 'node-1' "${tf_file}"; then
-                    node_name="node-1"
-                    node_ip="${NODE1_HOST}"
+    # Check optional instance stack-map configuration
+    local instance_map="${SCRIPT_DIR}/instance/stack-map.conf"
+    if [ -f "${instance_map}" ]; then
+        # shellcheck disable=SC2317
+        register_instance_stack() {
+            local map_app="$1"
+            local map_ctid="$2"
+            local map_node="$3"
+            if [ "${map_app}" = "${app}" ]; then
+                ctid="${map_ctid}"
+                node_name="${map_node}"
+                if command -v resolve_node_ip >/dev/null 2>&1; then
+                    node_ip=$(resolve_node_ip "${map_node}")
                 else
-                    node_name="node-2"
                     node_ip="${NODE2_HOST}"
                 fi
             fi
-            ;;
-    esac
+        }
+        # shellcheck disable=SC1090
+        . "${instance_map}"
+    fi
+
+    # Core baseline mappings (if not resolved by instance map)
+    if [ -z "${ctid}" ]; then
+        case "${app}" in
+            monitoring)
+                ctid="601"
+                node_name="node-1"
+                node_ip="${NODE1_HOST}"
+                ;;
+            offsite-backup)
+                ctid="602"
+                node_name="node-1"
+                node_ip="${NODE1_HOST}"
+                ;;
+            *)
+                # Fallback: scan tofu/ct-${app}.tf or tofu/instance-ct-${app}.tf for vm_id
+                local tf_file=""
+                if [ -f "${REPO_ROOT}/tofu/ct-${app}.tf" ]; then
+                    tf_file="${REPO_ROOT}/tofu/ct-${app}.tf"
+                elif [ -f "${REPO_ROOT}/tofu/instance-ct-${app}.tf" ]; then
+                    tf_file="${REPO_ROOT}/tofu/instance-ct-${app}.tf"
+                fi
+
+                if [ -n "${tf_file}" ]; then
+                    ctid=$(grep -E 'vm_id\s*=' "${tf_file}" | head -n1 | grep -o '[0-9]\+' || true)
+                    if [ -n "${ctid}" ]; then
+                        local loc=""
+                        if command -v ct_location >/dev/null 2>&1; then
+                            loc=$(ct_location "${ctid}" "${NODE1_HOST}")
+                        fi
+                        if [ -n "${loc}" ]; then
+                            node_name=$(echo "${loc}" | cut -d'|' -f1)
+                            if command -v resolve_node_ip >/dev/null 2>&1; then
+                                node_ip=$(resolve_node_ip "${node_name}")
+                            else
+                                node_ip="${NODE1_HOST}"
+                            fi
+                        elif grep -q 'node-1' "${tf_file}"; then
+                            node_name="node-1"
+                            node_ip="${NODE1_HOST}"
+                        else
+                            node_name="node-2"
+                            node_ip="${NODE2_HOST}"
+                        fi
+                    fi
+                fi
+                ;;
+        esac
+    fi
 
     if [ -z "${ctid}" ]; then
         echo ""

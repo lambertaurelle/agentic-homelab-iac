@@ -3,8 +3,8 @@
 # Homelab Safety-First Scheduled Rolling Reboot Engine
 # ==============================================================================
 # Target Schedule:
-#   - Node 1 (node-1): Sunday 04:00 AM
-#   - Node 2 (node-2): Monday 04:00 AM
+#   - Node 1 (node-1): Sunday 05:00 AM
+#   - Node 2 (node-2): Monday 05:00 AM
 #
 # Pre-Reboot Safety Guards:
 #   1. Peer Node Ping Reachability: Verifies peer host is alive.
@@ -21,7 +21,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-if [ -f "${REPO_ROOT}/homelab-secrets.env" ]; then
+if [ -f "${SCRIPT_DIR}/lib/common.sh" ]; then
+    # shellcheck disable=SC1091
+    . "${SCRIPT_DIR}/lib/common.sh"
+fi
+
+if [ -f "${REPO_ROOT}/secrets.env" ]; then
+    # shellcheck disable=SC1091
+    . "${REPO_ROOT}/secrets.env"
+elif [ -f "${REPO_ROOT}/homelab-secrets.env" ]; then
     # shellcheck disable=SC1091
     . "${REPO_ROOT}/homelab-secrets.env"
 fi
@@ -96,9 +104,9 @@ if [ -n "${FORCE_NODE}" ]; then
     CURRENT_NODE="${FORCE_NODE}"
 else
     HOST_DETECT=$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo "")
-    if [[ "$HOST_DETECT" == *"1"* ]] || [[ "$HOST_DETECT" == "node-1"* ]] || ip addr show 2>/dev/null | grep -q "${NODE1_IP}"; then
+    if [[ "$HOST_DETECT" == "node-1" ]] || [[ "$HOST_DETECT" == "proxmox" ]] || [[ "$HOST_DETECT" == "${UTILITY_NODE_NAME:-node-1}" ]] || (ip -o addr show 2>/dev/null | grep -qwF "${NODE1_IP}"); then
         CURRENT_NODE="node-1"
-    elif [[ "$HOST_DETECT" == *"2"* ]] || [[ "$HOST_DETECT" == "node-2"* ]] || ip addr show 2>/dev/null | grep -q "${NODE2_IP}"; then
+    elif [[ "$HOST_DETECT" == "node-2" ]] || [[ "$HOST_DETECT" == "tuxmox" ]] || [[ "$HOST_DETECT" == "${COMPUTE_NODE_NAME:-node-2}" ]] || (ip -o addr show 2>/dev/null | grep -qwF "${NODE2_IP}"); then
         CURRENT_NODE="node-2"
     else
         log "[-] ERROR: Unable to determine node identity (hostname: '${HOST_DETECT}')."
@@ -134,7 +142,7 @@ fi
 log "[*] Current Host:  ${CURRENT_NODE} (${CURRENT_IP})"
 log "[*] Target Peer:   ${PEER_NODE} (${PEER_IP})"
 log "[*] Peer AdGuard:  ${PEER_ADGUARD_IP}"
-log "[*] Target Day:    ${SCHEDULED_DAY} (04:00 AM)"
+log "[*] Target Day:    ${SCHEDULED_DAY} (05:00 AM)"
 
 # ==============================================================================
 # PRE-REBOOT SAFETY GUARDS

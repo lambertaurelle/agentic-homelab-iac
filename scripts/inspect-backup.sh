@@ -66,8 +66,8 @@ echo "--------------------------------------------------------------------------
 if [ "${CT_STATUS}" = "running" ]; then
     "${PVE_EXEC}" node-1 pct exec "${CTID}" -- journalctl -u offsite-backup.service -n "${TAIL_LINES}" --no-pager 2>/dev/null || echo "[-] No journal entries found."
 else
-    # Inspect via temporary read-only mount without starting container
-    "${PVE_EXEC}" node-1 "pct mount ${CTID} >/dev/null 2>&1 || true; ROOTFS=/var/lib/lxc/${CTID}/rootfs; if [ -d \"\$ROOTFS/var/log/journal\" ]; then journalctl -D \"\$ROOTFS/var/log/journal\" -u offsite-backup.service -n ${TAIL_LINES} --no-pager 2>/dev/null; elif [ -f \"\$ROOTFS/var/log/offsite-backup.log\" ]; then tail -n ${TAIL_LINES} \"\$ROOTFS/var/log/offsite-backup.log\"; else echo '[-] No offsite-backup logs detected on container rootfs.'; fi; pct unmount ${CTID} >/dev/null 2>&1 || true"
+    # Inspect via host-level cron log non-destructively (never mount container rootfs)
+    "${PVE_EXEC}" node-1 "if [ -f /var/log/homelab-offsite-backup.log ]; then tail -n ${TAIL_LINES} /var/log/homelab-offsite-backup.log; else echo '[-] No offsite backup logs detected on host (/var/log/homelab-offsite-backup.log).'; fi"
 fi
 
 # 3. Snapshot History (if requested)
@@ -78,8 +78,9 @@ if [ "${SHOW_SNAPSHOTS}" = true ]; then
     if [ "${CT_STATUS}" = "running" ]; then
         "${PVE_EXEC}" node-1 "pct exec ${CTID} -- bash -c 'set -a; [ -f /etc/offsite-backup/backup.env ] && . /etc/offsite-backup/backup.env; set +a; export RESTIC_REPOSITORY=\"rclone:\${OFFSITE_BACKUP_REMOTE_NAME:-offsite-remote}:\${OFFSITE_BACKUP_REMOTE_PATH:-homelab-backups}\"; export RCLONE_CONFIG=/etc/offsite-backup/rclone.conf; restic snapshots'"
     else
-        # Temporarily spin up worker, query snapshots, and power down
-        "${PVE_EXEC}" node-1 "pct start ${CTID} >/dev/null 2>&1; pct exec ${CTID} -- bash -c 'set -a; [ -f /etc/offsite-backup/backup.env ] && . /etc/offsite-backup/backup.env; set +a; export RESTIC_REPOSITORY=\"rclone:\${OFFSITE_BACKUP_REMOTE_NAME:-offsite-remote}:\${OFFSITE_BACKUP_REMOTE_PATH:-homelab-backups}\"; export RCLONE_CONFIG=/etc/offsite-backup/rclone.conf; restic snapshots'; pct stop ${CTID} >/dev/null 2>&1"
+        echo "[!] Notice: Worker container CT ${CTID} is currently stopped (ephemeral standby)."
+        echo "    To avoid lock contention or accidental backup triggers, snapshots can be queried"
+        echo "    while the container runs during its scheduled window (03:45 AM) or via manual start."
     fi
 fi
 

@@ -47,7 +47,8 @@ Prompt the user or check for existing credentials in `secrets.env` or 1Password 
 1. **Proxmox API Credentials**: Host IP/FQDN, API token or root credentials.
 2. **DNS & Networking**: Subnet CIDR, Gateway IP, Domain name.
 3. **Ingress**: Cloudflare Tunnel Token (optional, for external zero-trust access).
-4. **Topology**: Single-node (`enable_ha = false`) or Multi-node HA (`enable_ha = true`).
+4. **Topology**: Single-node or Multi-node HA cluster.
+5. **Tailscale VPN**: Optional Tailscale subnet router (`ENABLE_TAILSCALE="true"`).
 
 Generate OpenTofu variables and stack environment files (this generates baseline vars and automatically invokes `scripts/instance/bootstrap-instance-secrets.sh` if present):
 ```bash
@@ -63,7 +64,7 @@ tofu fmt -check
 tofu validate
 tofu plan
 ```
-Present the execution plan to the user showing the baseline resources to be created (CT 501 AdGuard, CT 510 Cloudflared, CT 601 Monitoring).
+Present the execution plan to the user showing the baseline resources to be created (CT 501 AdGuard, CT 510 Cloudflared, CT 520 Tailscale [if enabled], CT 601 Monitoring, CT 602 Offsite Backup).
 
 ### 4. Provision Core Infrastructure
 Apply the declarative configuration:

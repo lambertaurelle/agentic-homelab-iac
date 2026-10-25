@@ -14,9 +14,10 @@ Declarative, agentic-first, pedagogical infrastructure-as-code template for **Pr
 Most homelab repositories are cluttered with monolithic personal stacks (Plex, torrent clients, niche apps) that break when cloned on different hardware.
 
 `agentic-homelab-iac` takes a modern **Agentic-First** approach:
-1. **Pristine 4-Service Baseline**: Deploys only what every homelab needs on Day-0:
+1. **Pristine Core Baseline**: Deploys the essential foundation every homelab needs on Day-0:
    - 🛡️ **AdGuard Home** (`CT 501`): Local DNS resolver, ad-blocking, and DHCP management.
    - 🚇 **Cloudflare Tunnel** (`CT 510`): Zero-trust inbound access without opening firewall ports.
+   - 🔐 **Tailscale** (`CT 520`): Opt-in Mesh VPN subnet router and SSH bastion.
    - 📊 **Uptime Kuma** (`CT 601`): Health monitoring and instant Discord/Telegram alerts.
    - ☁️ **Offsite Cloud Backup** (`CT 602`): Differential client-side encrypted (AES-256) cloud backups (pCloud, S3, B2 via Restic + Rclone) with remote quota alerts.
    - 🛠️ **`mgmt-devops`** (`CT 900`): Dedicated unprivileged IaC control plane running OpenTofu and Antigravity CLI.
@@ -41,6 +42,7 @@ flowchart TD
     subgraph BaselineCore["🌐 Day-0 Core Baseline Services"]
         DNS["CT 501: AdGuard Home (DNS & DHCP)"]
         Ingress["CT 510: Cloudflare Tunnel (Ingress)"]
+        VPN["CT 520: Tailscale (Mesh VPN & Subnet Router)"]
         Kuma["CT 601: Uptime Kuma (Observability)"]
         Backup["CT 602: Offsite Cloud Backup (Restic/Rclone)"]
     end
@@ -270,6 +272,7 @@ agentic-homelab-iac/
 │   ├── install-antigravity-remote.sh # Antigravity Remote Control daemon installer
 │   ├── install-cloudflared.sh      # Cloudflare Tunnel connector installer
 │   ├── install-offsite-backup.sh   # Offsite cloud backup worker installer (CT 602)
+│   ├── install-tailscale.sh        # Tailscale Subnet Router & SSH Bastion installer (CT 520)
 │   ├── manage-backup-targets.sh    # Declarative backup target dataset CLI
 │   ├── restore-all-lxc.sh          # Automated VZDump container restoration
 │   ├── run-offsite-backup.sh       # Restic + Rclone differential backup runner
@@ -290,6 +293,7 @@ agentic-homelab-iac/
     ├── ct-cloudflared.tf           # Core Cloudflare Tunnel LXC definition (CT 510)
     ├── ct-monitoring.tf            # Core Uptime Kuma LXC definition (CT 601)
     ├── ct-offsite-backup.tf        # Core Offsite Cloud Backup LXC definition (CT 602)
+    ├── ct-tailscale.tf             # Core Tailscale Subnet Router LXC definition (CT 520)
     ├── instance-ct-*.tf            # (Private Overlay) Custom container definitions
     ├── outputs.tf                  # Infrastructure outputs
     ├── providers.tf                # OpenTofu bpg/proxmox provider

@@ -33,6 +33,10 @@ for arg in "$@"; do
     esac
 done
 
+if [ "${EPHEMERAL_MODE}" = true ]; then
+    trap 'echo "[*] Ephemeral mode: shutting down container..."; poweroff 2>/dev/null || shutdown -h now 2>/dev/null || true' EXIT
+fi
+
 # ------------------------------------------------------------------------------
 # 1. Environment & Credentials Resolution
 # ------------------------------------------------------------------------------
@@ -220,8 +224,14 @@ KEEP_WEEKLY=2
 if [ "${DRY_RUN}" = false ]; then
     echo "------------------------------------------------------------------------------"
     echo "[*] Pruning expired snapshots (--keep-daily ${KEEP_DAILY} --keep-weekly ${KEEP_WEEKLY})..."
-    restic forget --prune --keep-daily "${KEEP_DAILY}" --keep-weekly "${KEEP_WEEKLY}" >/dev/null 2>&1 || true
-    echo "[+] Snapshot retention applied."
+    restic unlock >/dev/null 2>&1 || true
+    if ! restic forget --prune --keep-daily "${KEEP_DAILY}" --keep-weekly "${KEEP_WEEKLY}"; then
+        echo "[-] Warning: Snapshot pruning failed." >&2
+        TARGETS_ERRORS+=$'\nPruning expired snapshots failed.'
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+    else
+        echo "[+] Snapshot retention applied."
+    fi
 fi
 
 # ------------------------------------------------------------------------------
@@ -294,18 +304,28 @@ echo "[*] Total Duration    : ${DURATION_HR}"
 echo "[*] Storage Quota     : ${QUOTA_USED_HR} / ${QUOTA_TOTAL_HR} (${QUOTA_STATUS})"
 echo "=============================================================================="
 
-# Build Discord Fields
+# Build Discord Fields safely via environment variables
+export SUCCESS_COUNT FAIL_COUNT DURATION_HR QUOTA_USED_HR QUOTA_TOTAL_HR QUOTA_PERCENT QUOTA_FREE_HR TARGETS_SUMMARY TARGETS_ERRORS
 FIELDS_JSON=$(python3 -c "
-import json
+import json, os
+sc = os.environ.get('SUCCESS_COUNT', '0')
+fc = os.environ.get('FAIL_COUNT', '0')
+dur = os.environ.get('DURATION_HR', '0s')
+qu = os.environ.get('QUOTA_USED_HR', 'N/A')
+qt = os.environ.get('QUOTA_TOTAL_HR', 'N/A')
+qp = os.environ.get('QUOTA_PERCENT', '0')
+qf = os.environ.get('QUOTA_FREE_HR', 'N/A')
+ts = os.environ.get('TARGETS_SUMMARY', '').strip() or 'None'
+te = os.environ.get('TARGETS_ERRORS', '').strip()
+
 fields = [
-    {'name': 'Targets Processed', 'value': '${SUCCESS_COUNT} successful, ${FAIL_COUNT} failed', 'inline': True},
-    {'name': 'Duration', 'value': '${DURATION_HR}', 'inline': True},
-    {'name': 'Remote Storage Quota', 'value': '${QUOTA_USED_HR} / ${QUOTA_TOTAL_HR} (${QUOTA_PERCENT}%)\nFree: ${QUOTA_FREE_HR}', 'inline': False},
-    {'name': 'Dataset Breakdown', 'value': '''${TARGETS_SUMMARY}'''.strip() or 'None', 'inline': False}
+    {'name': 'Targets Processed', 'value': f'{sc} successful, {fc} failed', 'inline': True},
+    {'name': 'Duration', 'value': dur, 'inline': True},
+    {'name': 'Remote Storage Quota', 'value': f'{qu} / {qt} ({qp}%)\nFree: {qf}', 'inline': False},
+    {'name': 'Dataset Breakdown', 'value': ts, 'inline': False}
 ]
-err_details = '''${TARGETS_ERRORS}'''.strip()
-if int('${FAIL_COUNT}') > 0 and err_details:
-    fields.append({'name': 'Error Details', 'value': err_details[:1000], 'inline': False})
+if int(fc) > 0 and te:
+    fields.append({'name': 'Error Details', 'value': te[:1000], 'inline': False})
 print(json.dumps(fields))
 ")
 

@@ -342,7 +342,7 @@ jobs:
           # Configure secrets.HOMELAB_APP_HOST (e.g. 10.0.0.x or domain) and secrets.WATCHTOWER_TOKEN
           curl -f -sS -X POST \\
                -H "Authorization: Bearer \${{ secrets.WATCHTOWER_TOKEN }}" \\
-               "http://\${{ secrets.HOMELAB_APP_HOST }}:8080/v1/update"
+               "http://\${{ secrets.HOMELAB_APP_HOST }}:8081/v1/update"
           echo "[+] Deployment triggered successfully!"
 SNIPPET_EOF
 )

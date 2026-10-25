@@ -200,3 +200,34 @@ offsite_backup_mount_points = [
   #   read_only = true
   # }
 ]
+
+# ==============================================================================
+# Tailscale Subnet Router & SSH Bastion LXC Configuration (Opt-in)
+# ==============================================================================
+enable_tailscale           = false
+tailscale_ct_id            = 520
+tailscale_hostname         = "tailscale"
+tailscale_cores            = 1
+tailscale_memory           = 512
+tailscale_swap             = 256
+tailscale_disk_storage     = "local-lvm"
+tailscale_disk_size        = 8
+
+# Networking
+tailscale_network_bridge = "vmbr0"
+tailscale_mac_address    = "bc:24:11:00:05:20"
+tailscale_ipv4_address   = "dhcp"
+
+# SSH keys to inject for root access
+tailscale_ssh_public_keys = [
+  # "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... root@mgmt-devops",
+  # "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACA... root@node-1",
+  # "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACA... root@node-2"
+]
+
+# Shared SSH Public Keys for Application Containers (modules/app-container)
+app_ssh_public_keys = [
+  # "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... root@mgmt-devops",
+  # "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACA... root@node-1",
+  # "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACA... root@node-2"
+]

@@ -58,7 +58,7 @@ The update engine provides end-to-end patching across hypervisors, native LXC pa
 
 2. **Stage 2: LXC Container OS Updates**
    - Iterates through running containers across both nodes:
-     - **Utility Node (`node-1`)**: CT 501 (`adguard-primary`), CT 510 (`cloudflared-primary`), CT 601 (`monitoring`), CT 900 (`mgmt-devops`).
+     - **Utility Node (`node-1`)**: CT 501 (`adguard-primary`), CT 510 (`cloudflared-primary`), CT 520 (`tailscale`), CT 601 (`monitoring`), CT 900 (`mgmt-devops`).
      - **Compute Node (`node-2`)**: CT 502 (`adguard-secondary`), CT 511 (`cloudflared-secondary`), plus all dynamically discovered application containers.
    - Executes Debian security and package upgrades inside each container via `pct exec`.
 
