@@ -264,6 +264,18 @@ restore_container() {
         return 1
     fi
 
+    # 6b. Ensure /dev/net/tun passthrough for Tailscale Subnet Router prior to boot
+    if [ "${ctid}" = "${TAILSCALE_CT_ID:-520}" ]; then
+        echo "[*] Ensuring /dev/net/tun passthrough in /etc/pve/lxc/${ctid}.conf on ${target_node}..."
+        run_on_node "${target_node}" "
+            CONF_FILE=\"/etc/pve/lxc/${ctid}.conf\"
+            if [ -f \"\${CONF_FILE}\" ]; then
+                grep -Fq 'lxc.cgroup2.devices.allow: c 10:200 rwm' \"\${CONF_FILE}\" || echo 'lxc.cgroup2.devices.allow: c 10:200 rwm' >> \"\${CONF_FILE}\"
+                grep -Fq 'lxc.mount.entry: /dev/net/tun' \"\${CONF_FILE}\" || echo 'lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file' >> \"\${CONF_FILE}\"
+            fi
+        "
+    fi
+
     # 7. Start container if requested
     if [ "${auto_start}" = "yes" ]; then
         echo "[*] Starting restored container ${ctid} on ${target_node}..."
@@ -329,9 +341,9 @@ restore_all() {
 
     for ctid in ${ctids}; do
         if restore_container "${ctid}" "${target_storage}" "${explicit_node}" "" "${auto_start}" "yes"; then
-            ((success_count++))
+            success_count=$((success_count + 1))
         else
-            ((fail_count++))
+            fail_count=$((fail_count + 1))
             echo "[-] Restoration failed for CT ${ctid}, proceeding with remaining containers..."
         fi
     done

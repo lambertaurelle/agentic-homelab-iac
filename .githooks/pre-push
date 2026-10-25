@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Git Pre-Push Hook: Secret Verification & Zero Upstream Leak Enforcement
+# ==============================================================================
+set -euo pipefail
+
+REMOTE_NAME="${1:-}"
+REMOTE_URL="${2:-}"
+
+# Read push range lines from stdin (<local_ref> <local_sha> <remote_ref> <remote_sha>)
+while read -r local_ref local_sha remote_ref remote_sha; do
+    # Skip branch deletion
+    if [ "${local_sha}" = "0000000000000000000000000000000000000000" ]; then
+        continue
+    fi
+
+    # Determine commit range
+    if [ "${remote_sha}" = "0000000000000000000000000000000000000000" ] || [ -z "${remote_sha}" ]; then
+        # New branch: compare against remote base branch or local main
+        if git rev-parse --verify "${REMOTE_NAME}/main" >/dev/null 2>&1; then
+            COMMIT_RANGE="${REMOTE_NAME}/main..${local_sha}"
+        elif git rev-parse --verify "origin/main" >/dev/null 2>&1; then
+            COMMIT_RANGE="origin/main..${local_sha}"
+        else
+            COMMIT_RANGE="@{u}..${local_sha}"
+        fi
+    else
+        COMMIT_RANGE="${remote_sha}..${local_sha}"
+    fi
+
+    echo "[*] [pre-push] Inspecting commit range: ${COMMIT_RANGE} -> ${REMOTE_NAME} (${REMOTE_URL})"
+
+    # --------------------------------------------------------------------------
+    # 1. Gitleaks Secret Scanning Gate
+    # --------------------------------------------------------------------------
+    GITLEAKS_BIN=$(command -v gitleaks 2>/dev/null || find /root/.cache/pre-commit -type f -name gitleaks -perm -u+x 2>/dev/null | head -n1 || true)
+    if [ -n "${GITLEAKS_BIN}" ] && [ -x "${GITLEAKS_BIN}" ]; then
+        REPO_ROOT="$(git rev-parse --show-toplevel)"
+        CONFIG_FLAG=()
+        if [ -f "${REPO_ROOT}/.gitleaks.toml" ]; then
+            CONFIG_FLAG=(--config "${REPO_ROOT}/.gitleaks.toml")
+        fi
+
+        if ! "${GITLEAKS_BIN}" detect --no-banner --redact --log-opts="${COMMIT_RANGE}" "${CONFIG_FLAG[@]}" 2>&1; then
+            echo "[-] [pre-push] ERROR: Gitleaks detected sensitive credentials in outgoing commits (${COMMIT_RANGE})." >&2
+            echo "[-] Push aborted. Please remove sensitive credentials from history before pushing." >&2
+            exit 1
+        fi
+        echo "[+] [pre-push] Gitleaks scan passed."
+    fi
+
+    # --------------------------------------------------------------------------
+    # 2. Zero Upstream Leak Enforcement Gate
+    # --------------------------------------------------------------------------
+    IS_UPSTREAM=false
+    if [[ "${REMOTE_NAME}" == "upstream"* ]] || [[ "${REMOTE_URL}" == *"agentic-homelab-iac"* ]]; then
+        IS_UPSTREAM=true
+    fi
+
+    if [ "${IS_UPSTREAM}" = true ]; then
+        echo "[*] [pre-push] Verifying Zero Upstream Leak Invariants for ${REMOTE_NAME}..."
+
+        # Check for forbidden instance paths in commit range diff
+        FORBIDDEN_FILES=$(git log "${COMMIT_RANGE}" --name-only --format='' | grep -E '(^|/)instance/|(^|/)instance-|\.agents/plugins\.json' | sort -u || true)
+        if [ -n "${FORBIDDEN_FILES}" ]; then
+            echo "[-] [pre-push] FATAL: Private instance files detected in upstream push:" >&2
+            echo "${FORBIDDEN_FILES}" | sed 's/^/    ! /' >&2
+            echo "[-] Zero Upstream Leak Invariant violated. Push aborted." >&2
+            exit 1
+        fi
+
+        # Check for private personal keywords in commit diff content (excluding the pre-push hook itself)
+        FORBIDDEN_MATCHES=$(git log -p "${COMMIT_RANGE}" -- . ':!.githooks/pre-push' | grep -Ei '^\+[^+].*(proxmox-tailscale|EvanSecure|lecuchon\.family|@aurelle\.eu)' || true)
+        if [ -n "${FORBIDDEN_MATCHES}" ]; then
+            echo "[-] [pre-push] FATAL: Private instance identifiers detected in upstream diff:" >&2
+            echo "${FORBIDDEN_MATCHES}" | head -n 5 | sed 's/^/    ! /' >&2
+            echo "[-] Zero Upstream Leak Invariant violated. Push aborted." >&2
+            exit 1
+        fi
+
+        echo "[+] [pre-push] Zero Upstream Leak Invariants verified successfully."
+    fi
+done
+
+exit 0

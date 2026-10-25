@@ -56,8 +56,9 @@ sync_scripts_to_node() {
     echo "[*] Synchronizing maintenance scripts to ${node_name} (${node_ip})..."
 
     if ip addr show 2>/dev/null | grep -q "${node_ip}" || [[ "$node_ip" == "localhost" ]] || [[ "$node_ip" == "127.0.0.1" ]]; then
-        mkdir -p /root/homelab-iac/scripts
+        mkdir -p /root/homelab-iac/scripts/lib
         cp -a "${SCRIPT_DIR}"/*.sh /root/homelab-iac/scripts/ 2>/dev/null || true
+        cp -a "${SCRIPT_DIR}/lib"/* /root/homelab-iac/scripts/lib/ 2>/dev/null || true
         chmod +x /root/homelab-iac/scripts/*.sh 2>/dev/null || true
         if [ -f "${BASE_DIR}/homelab-secrets.env" ]; then
             cp -a "${BASE_DIR}/homelab-secrets.env" /root/homelab-iac/homelab-secrets.env 2>/dev/null || true
@@ -69,8 +70,9 @@ sync_scripts_to_node() {
             fi
         done
     else
-        ssh -o StrictHostKeyChecking=no "root@${node_ip}" "mkdir -p /root/homelab-iac/scripts"
+        ssh -o StrictHostKeyChecking=no "root@${node_ip}" "mkdir -p /root/homelab-iac/scripts/lib"
         scp -o StrictHostKeyChecking=no "${SCRIPT_DIR}"/*.sh "root@${node_ip}:/root/homelab-iac/scripts/"
+        scp -r -o StrictHostKeyChecking=no "${SCRIPT_DIR}/lib"/* "root@${node_ip}:/root/homelab-iac/scripts/lib/" 2>/dev/null || true
         ssh -o StrictHostKeyChecking=no "root@${node_ip}" "chmod +x /root/homelab-iac/scripts/*.sh"
         if [ -f "${BASE_DIR}/homelab-secrets.env" ]; then
             scp -o StrictHostKeyChecking=no "${BASE_DIR}/homelab-secrets.env" "root@${node_ip}:/root/homelab-iac/homelab-secrets.env" 2>/dev/null || true
@@ -124,7 +126,7 @@ cat <<EOF | crontab -
 ${EXISTING_CRON}
 # Homelab Maintenance Automation (Node: node-1)
 0 5 * * * /root/homelab-iac/scripts/update-cluster-stack.sh >> /var/log/homelab-updates.log 2>&1
-30 5 * * * /root/homelab-iac/scripts/scan-security.sh --discord --report >> /var/log/homelab-security-audit.log 2>&1
+30 5 * * * if pct status 900 2>/dev/null | grep -q 'running'; then pct exec 900 -- /root/homelab-iac/scripts/scan-security.sh --discord --report; else /root/homelab-iac/scripts/scan-security.sh --discord --report; fi >> /var/log/homelab-security-audit.log 2>&1
 0 4 * * 0 /root/homelab-iac/scripts/scheduled-reboot.sh >> /var/log/homelab-reboot.log 2>&1
 EOF
 CRON_NODE1_EOF

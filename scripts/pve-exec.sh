@@ -23,31 +23,24 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
+# Source shared library if available
+if [ -f "${SCRIPT_DIR}/lib/common.sh" ]; then
+    # shellcheck disable=SC1091
+    . "${SCRIPT_DIR}/lib/common.sh"
+fi
+
 # Load environment configuration if available
-if [ -f "${REPO_ROOT}/homelab-secrets.env" ]; then
+if [ -f "${REPO_ROOT}/secrets.env" ]; then
+    # shellcheck disable=SC1091
+    . "${REPO_ROOT}/secrets.env"
+elif [ -f "${REPO_ROOT}/homelab-secrets.env" ]; then
     # shellcheck disable=SC1091
     . "${REPO_ROOT}/homelab-secrets.env"
 fi
 
 # Fallback node definitions
-NODE1_IP="${NODE1_IP:-}"
-NODE2_IP="${NODE2_IP:-}"
-
-if [ -z "${NODE1_IP}" ]; then
-    if grep -q "proxmox" /etc/hosts 2>/dev/null; then
-        NODE1_IP="proxmox"
-    else
-        NODE1_IP="10.0.0.10"
-    fi
-fi
-
-if [ -z "${NODE2_IP}" ]; then
-    if grep -q "tuxmox" /etc/hosts 2>/dev/null; then
-        NODE2_IP="tuxmox"
-    else
-        NODE2_IP="10.0.0.11"
-    fi
-fi
+NODE1_IP="${NODE1_IP:-10.0.0.10}"
+NODE2_IP="${NODE2_IP:-10.0.0.20}"
 
 if [ "$#" -eq 0 ]; then
     echo "Usage: $0 [node-1|node-2|<ip-or-host>] <command...>"
@@ -92,20 +85,10 @@ if [ "${#CMD_ARGS[@]}" -eq 0 ]; then
     exit 1
 fi
 
-# Determine if the target host is local to this environment
-is_local() {
-    local host="$1"
-    if [[ "${host}" == "localhost" ]] || [[ "${host}" == "127.0.0.1" ]]; then
-        return 0
-    fi
-    if ip addr show 2>/dev/null | grep -Fwq "${host}"; then
-        return 0
-    fi
-    return 1
-}
-
 # Execute command
-if is_local "${TARGET_HOST}"; then
+if command -v is_local_node >/dev/null 2>&1 && is_local_node "${TARGET_HOST}"; then
+    exec "${CMD_ARGS[@]}"
+elif [ "${TARGET_HOST}" = "localhost" ] || [ "${TARGET_HOST}" = "127.0.0.1" ]; then
     exec "${CMD_ARGS[@]}"
 else
     # Run via SSH with strict batch mode to avoid hanging on password prompts

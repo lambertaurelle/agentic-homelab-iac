@@ -88,3 +88,8 @@ output "offsite_backup_hostname" {
   description = "Hostname of the Offsite Cloud Backup worker"
   value       = proxmox_virtual_environment_container.offsite_backup.initialization[0].hostname
 }
+
+output "tailscale_container_id" {
+  description = "Container ID of the Tailscale Subnet Router & SSH Bastion container"
+  value       = var.enable_tailscale ? module.ct_tailscale[0].container_id : null
+}

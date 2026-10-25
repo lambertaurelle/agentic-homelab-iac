@@ -52,6 +52,9 @@ while [[ $# -gt 0 ]]; do
             RC_NAME="${1#*=}"
             shift
             ;;
+        --no-prompt)
+            shift
+            ;;
         -f|--follow)
             FOLLOW_LOGS=true
             shift

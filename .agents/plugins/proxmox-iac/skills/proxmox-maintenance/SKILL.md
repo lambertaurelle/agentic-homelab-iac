@@ -43,7 +43,7 @@ Perform a safe rolling reboot with pre-flight safety checks:
 # Execute safe reboot engine on target node
 ./scripts/scheduled-reboot.sh
 ```
-The script validates peer node reachability and DNS resolution before triggering the reboot. In single-node environments (`enable_ha = false`), peer checks are gracefully bypassed.
+The script validates peer node reachability and DNS resolution before triggering the reboot. In standalone/single-node environments, peer checks are bypassed.
 
 ### 3. Snapshot Backup & Disaster Recovery
 Trigger backup operations or restore workloads:

@@ -187,6 +187,9 @@ tofu apply -auto-approve
    # Core Monitoring (CT 601)
    pct exec 601 -- bash -c "$(cat /root/homelab-iac/scripts/bootstrap-docker-host.sh) && cd /opt/monitoring && docker compose up -d"
 
+   # Tailscale Subnet Router & SSH Bastion (CT 520, if enabled)
+   /root/homelab-iac/scripts/install-tailscale.sh install
+
    # Management Workspace Antigravity 2.0 Remote Control Service (CT 900)
    /root/homelab-iac/scripts/install-antigravity-remote.sh install --name mgmt-devops --no-prompt
 

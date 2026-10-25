@@ -55,23 +55,6 @@ variable "proxmox_ssh_username" {
 # Cluster & Node Variables (Node & Storage Agnostic)
 # ==============================================================================
 
-variable "primary_node_name" {
-  description = "Primary Proxmox VE hypervisor node name (works for single-node and multi-node setups)"
-  type        = string
-  default     = "node-1"
-}
-
-variable "enable_ha" {
-  description = "Enable High Availability secondary containers (e.g. AdGuard secondary, Cloudflared secondary)"
-  type        = bool
-  default     = true
-}
-
-variable "secondary_node_name" {
-  description = "Secondary Proxmox VE hypervisor node name for HA failover (optional for single-node)"
-  type        = string
-  default     = "node-2"
-}
 
 variable "default_disk_storage" {
   description = "Default storage pool for container root disks (e.g. local-lvm, local-zfs)"
@@ -745,4 +728,98 @@ variable "offsite_backup_mount_points" {
     read_only = optional(bool, true)
   }))
   default = []
+}
+
+# ==============================================================================
+# Tailscale Subnet Router & SSH Bastion LXC Variables (CT 520 - Node: node-1)
+# ==============================================================================
+
+variable "enable_tailscale" {
+  description = "Enable declarative provisioning of Tailscale Subnet Router & SSH Bastion LXC container"
+  type        = bool
+  default     = false
+}
+
+variable "tailscale_ct_id" {
+  description = "Container ID for Tailscale Subnet Router LXC"
+  type        = number
+  default     = 520
+}
+
+variable "tailscale_hostname" {
+  description = "Hostname for Tailscale Subnet Router container"
+  type        = string
+  default     = "tailscale"
+}
+
+variable "tailscale_description" {
+  description = "Custom description override for Tailscale LXC container"
+  type        = string
+  default     = ""
+}
+
+variable "tailscale_cores" {
+  description = "Number of CPU cores allocated to Tailscale container"
+  type        = number
+  default     = 1
+}
+
+variable "tailscale_memory" {
+  description = "Dedicated RAM (MB) for Tailscale container"
+  type        = number
+  default     = 512
+}
+
+variable "tailscale_swap" {
+  description = "Swap space (MB) for Tailscale container"
+  type        = number
+  default     = 256
+}
+
+variable "tailscale_disk_storage" {
+  description = "Storage pool for Tailscale root disk"
+  type        = string
+  default     = "local-lvm"
+}
+
+variable "tailscale_disk_size" {
+  description = "Root disk size in GB for Tailscale container"
+  type        = number
+  default     = 8
+}
+
+variable "tailscale_network_bridge" {
+  description = "Network bridge interface for Tailscale container"
+  type        = string
+  default     = "vmbr0"
+}
+
+variable "tailscale_mac_address" {
+  description = "MAC address for Tailscale network interface"
+  type        = string
+  default     = "bc:24:11:00:05:20"
+}
+
+variable "tailscale_ipv4_address" {
+  description = "IPv4 address/CIDR or 'dhcp' for Tailscale container"
+  type        = string
+  default     = "dhcp"
+}
+
+variable "tailscale_ipv4_gateway" {
+  description = "IPv4 default gateway for Tailscale container (leave null if using DHCP)"
+  type        = string
+  default     = null
+}
+
+variable "tailscale_ssh_public_keys" {
+  description = "List of SSH public keys to install into /root/.ssh/authorized_keys for Tailscale container"
+  type        = list(string)
+  default     = []
+}
+
+variable "tailscale_tags" {
+  description = "Proxmox tags to apply to the Tailscale container"
+  type        = list(string)
+  default     = ["tailscale", "vpn", "subnet-router", "ssh", "opentofu"]
 }

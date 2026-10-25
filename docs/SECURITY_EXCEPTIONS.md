@@ -40,6 +40,7 @@ The homelab runs a hybrid multi-node Proxmox VE topology comprising the **Utilit
 | **CT 502** | Compute Node (`node-2`) | `adguard` (Secondary) | Privileged (`unprivileged = false`) | Raw socket and low-port binding for HA secondary DNS (port 53) and DHCP server (port 67). |
 | **CT 510** | Utility Node (`node-1`) | `cloudflared` (Primary) | Unprivileged (`unprivileged = true`) | Outbound-only active Cloudflare Zero Trust Tunnel connector. |
 | **CT 511** | Compute Node (`node-2`) | `cloudflared` (Secondary) | Unprivileged (`unprivileged = true`) | Outbound-only standby HA Cloudflare Zero Trust Tunnel connector. |
+| **CT 520** | Utility Node (`node-1`) | `tailscale` | Unprivileged (`unprivileged = true`) | Mesh VPN subnet router & SSH bastion with scoped `/dev/net/tun` character device passthrough (`c 10:200 rwm`). |
 | **CT 601** | Utility Node (`node-1`) | `monitoring` | Privileged (`unprivileged = false`) | Nested Docker running Uptime Kuma monitoring engine (`/opt/monitoring`). |
 | **CT 900** | Utility Node (`node-1`) | `mgmt-devops` | Unprivileged (`unprivileged = true`) | **Management Workspace** for OpenTofu HCL provisioning, git operations, and administrative toolchains. |
 

@@ -23,6 +23,7 @@ graph TB
         subgraph CoreBaseline ["Day-0 Core Baseline Services"]
             CT501["CT 501: AdGuard Home (Primary DNS / DHCP)"]
             CT510["CT 510: Cloudflare Tunnel (Primary Ingress)"]
+            CT520["CT 520: Tailscale Subnet Router & SSH Bastion (VPN)"]
             CT601["CT 601: Uptime Kuma (Observability & Alerts)"]
             CT602["CT 602: Offsite Cloud Backup (Restic/Rclone Differential Engine)"]
         end
@@ -110,7 +111,7 @@ Workloads onboarded via `@workload-architect` and `scripts/scaffold-app.sh` map 
 ### 3. Startup Boot Order Hierarchy
 During host reboot or recovery, LXC containers start in strict dependency order:
 1. **Order 1 (Delay: 0s)**: Core network & DNS resolver (`CT 501`, `CT 502`).
-2. **Order 2 (Delay: 5s)**: External ingress layer (`CT 510`, `CT 511`).
+2. **Order 2 (Delay: 5s)**: External ingress & VPN layer (`CT 510`, `CT 511`, `CT 520`).
 3. **Order 3 (Delay: 10s)**: Application workloads & monitoring (`CT 601`, app containers).
 4. **Host Default**: Management Workspace (`CT 900`) & Developer Workstation (`CT 901`).
 

@@ -8,12 +8,47 @@
 #   3. Checkov / Trivy static analysis (if installed)
 #
 # Usage:
-#   ./scripts/scan-security.sh
+#   ./scripts/scan-security.sh [--discord] [--report]
 # ==============================================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+# Source secrets if present for webhooks
+if [ -f "${REPO_ROOT}/secrets.env" ]; then
+    # shellcheck disable=SC1091
+    . "${REPO_ROOT}/secrets.env"
+elif [ -f "${REPO_ROOT}/homelab-secrets.env" ]; then
+    # shellcheck disable=SC1091
+    . "${REPO_ROOT}/homelab-secrets.env"
+fi
+
+SEND_DISCORD=false
+GENERATE_REPORT=false
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --discord)
+            SEND_DISCORD=true
+            shift
+            ;;
+        --report)
+            GENERATE_REPORT=true
+            shift
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+REPORT_FILE=""
+if [ "${GENERATE_REPORT}" = true ]; then
+    mkdir -p "${REPO_ROOT}/reports"
+    REPORT_FILE="${REPO_ROOT}/reports/security-audit-$(date '+%Y%m%d-%H%M%S').txt"
+    exec > >(tee -a "${REPORT_FILE}") 2>&1
+fi
 
 echo "=============================================================================="
 echo "    🛡️  Homelab Infrastructure Security & Quality Scanner                    "
@@ -79,10 +114,37 @@ if command -v checkov >/dev/null 2>&1; then
 fi
 
 echo "=============================================================================="
-if [ "${FAILURES}" -eq 0 ]; then
+SCAN_STATUS="PASSED"
+STATUS_COLOR=65280
+if [ "${FAILURES}" -gt 0 ]; then
+    SCAN_STATUS="FAILED (${FAILURES} issues)"
+    STATUS_COLOR=16711680
+    echo "[-] Security scan completed with ${FAILURES} failure(s)."
+else
     echo "[+] All security and quality checks PASSED!"
+fi
+
+WEBHOOK="${DISCORD_SECURITY_WEBHOOK_URL:-${DISCORD_WEBHOOK_URL:-}}"
+if [ "${SEND_DISCORD}" = true ] && [ -n "${WEBHOOK}" ]; then
+    echo "[*] Dispatching Discord security audit alert..."
+    curl -s -X POST "${WEBHOOK}" \
+        -H "Content-Type: application/json" \
+        -d "{
+            \"embeds\": [{
+                \"title\": \"🛡️ Daily Security & DevSecOps Audit: ${SCAN_STATUS}\",
+                \"color\": ${STATUS_COLOR},
+                \"fields\": [
+                    {\"name\": \"Status\", \"value\": \"${SCAN_STATUS}\", \"inline\": true},
+                    {\"name\": \"Host\", \"value\": \"$(hostname)\", \"inline\": true},
+                    {\"name\": \"Failures\", \"value\": \"${FAILURES}\", \"inline\": true}
+                ],
+                \"timestamp\": \"$(date -u +'%Y-%m-%dT%H:%M:%SZ')\"
+            }]
+        }" >/dev/null 2>&1 || echo "[-] Failed to deliver Discord webhook."
+fi
+
+if [ "${FAILURES}" -eq 0 ]; then
     exit 0
 else
-    echo "[-] Security scan completed with ${FAILURES} failure(s)."
     exit 1
 fi

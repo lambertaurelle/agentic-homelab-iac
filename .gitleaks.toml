@@ -1,0 +1,76 @@
+# ==============================================================================
+# Gitleaks Custom Secret & PII Configuration (.gitleaks.toml)
+# ==============================================================================
+# Extends default Gitleaks rules with pattern checks for shell fallback defaults,
+# hardcoded password assignments, and PII leakage in core files.
+# ==============================================================================
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "shell-default-secret-fallback"
+description = "Hard-coded secret used as shell parameter expansion fallback ${VAR:-secret}"
+regex = '''\$\{[A-Z0-9_]*(TOKEN|SECRET|PASSWORD|PASSWD|PASS|KEY|RCON|AUD)[A-Z0-9_]*:-(?:\$\{[^}]*:-)?([^}$\s]{8,})\}'''
+secretGroup = 2
+
+[[rules]]
+id = "low-entropy-password-assignment"
+description = "Literal password or secret token assigned in configuration, env or script"
+regex = '''(?i)\b[A-Z0-9_]*(PASSWORD|PASSWD|RCON|SECRET|TOKEN)[A-Z0-9_]*\s*[=:]\s*["']?([^"'\s$<{#?:]{8,})'''
+secretGroup = 2
+[rules.allowlist]
+regexes = [
+    '''\$\{[A-Z0-9_]+:[?+-]''',
+    '''var\.proxmox'''
+]
+
+[[rules]]
+id = "pii-email"
+description = "Email address in core baseline files"
+regex = '''[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'''
+[rules.allowlist]
+paths = [
+    '''(^|/)instance(/|-)''',
+    '''\.agents/instance/'''
+]
+regexes = [
+    '''@(example\.(com|org)|users\.noreply\.github\.com)$''',
+    '''noreply@''',
+    '''root@mgmt-devops''',
+    '''root@node-[12]''',
+    '''root@proxmox''',
+    '''root@tuxmox'''
+]
+
+[[rules]]
+id = "pii-public-ipv4"
+description = "Public (non-RFC1918) IPv4 address in core baseline files"
+regex = '''\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b'''
+[rules.allowlist]
+paths = [
+    '''(^|/)instance(/|-)'''
+]
+regexes = [
+    '''^(10\.|127\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|0\.0\.0\.0|1\.1\.1\.1|1\.0\.0\.1|8\.8\.[48]\.[48]|9\.9\.9\.|149\.112\.112\.|255\.255\.255\.)'''
+]
+
+[allowlist]
+description = "Global allowlist for safe placeholders, documentation templates, and example files"
+regexes = [
+    '''(?i)change_?me''',
+    '''(?i)your[_-]''',
+    '''(?i)example''',
+    '''_TOKEN"?$''',
+    '''\.\.\.''',
+    '''(?i)placeholder''',
+    '''\*\*\*REMOVED''',
+    '''\${[A-Za-z0-9_]+}'''
+]
+paths = [
+    '''\.env\.example$''',
+    '''secrets\.env\.example$''',
+    '''\.tfvars\.example$''',
+    '''\.gitleaks\.toml$''',
+    '''implementation_plan\.md$'''
+]

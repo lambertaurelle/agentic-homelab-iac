@@ -59,130 +59,139 @@ HLP
 }
 
 cmd_list() {
-    python3 -c "
+    python3 -c '
 import sys, os, yaml
 
-targets_file = '${TARGETS_FILE}'
+targets_file = sys.argv[1]
 if not os.path.exists(targets_file):
-    print(f'[-] Targets file not found: {targets_file}', file=sys.stderr)
+    print(f"[-] Targets file not found: {targets_file}", file=sys.stderr)
     sys.exit(1)
 
-with open(targets_file, 'r', encoding='utf-8') as f:
+with open(targets_file, "r", encoding="utf-8") as f:
     data = yaml.safe_load(f) or {}
 
-targets = data.get('targets', [])
-retention = data.get('settings', {}).get('retention', {})
-quota = data.get('settings', {}).get('quota', {})
+targets = data.get("targets", [])
+retention = data.get("settings", {}).get("retention", {})
+quota = data.get("settings", {}).get("quota", {})
 
-print('========================================================================================================')
-print(f'    Offsite Backup Targets Configuration ({targets_file})')
-print('========================================================================================================')
-print(f'[*] Retention: keep-daily={retention.get(\"keep_daily\", 3)}, keep-weekly={retention.get(\"keep_weekly\", 2)}')
-print(f'[*] Quota Alerts: warning={quota.get(\"warning_threshold_percent\", 85)}%, critical={quota.get(\"critical_threshold_percent\", 95)}%')
-print('--------------------------------------------------------------------------------------------------------')
-print(f'{\"TARGET NAME\":<20} | {\"STATUS\":<8} | {\"EXISTS?\":<7} | {\"SOURCE PATH\":<40}')
-print('---------------------+----------+---------+-------------------------------------------------------------')
+print("========================================================================================================")
+print(f"    Offsite Backup Targets Configuration ({targets_file})")
+print("========================================================================================================")
+kd = retention.get("keep_daily", 3)
+kw = retention.get("keep_weekly", 2)
+qw = quota.get("warning_threshold_percent", 85)
+qc = quota.get("critical_threshold_percent", 95)
+hdr_target = "TARGET NAME"
+hdr_status = "STATUS"
+hdr_exists = "EXISTS?"
+hdr_source = "SOURCE PATH"
+
+print(f"[*] Retention: keep-daily={kd}, keep-weekly={kw}")
+print(f"[*] Quota Alerts: warning={qw}%, critical={qc}%")
+print("--------------------------------------------------------------------------------------------------------")
+print(f"{hdr_target:<20} | {hdr_status:<8} | {hdr_exists:<7} | {hdr_source:<40}")
+print("---------------------+----------+---------+-------------------------------------------------------------")
 
 for t in targets:
-    name = t.get('name', 'unnamed')
-    enabled = 'ENABLED' if t.get('enabled', False) else 'DISABLED'
-    src = t.get('source', '')
-    exists = 'YES' if os.path.exists(src) else 'NO'
-    print(f'{name:<20} | {enabled:<8} | {exists:<7} | {src:<40}')
+    name = t.get("name", "unnamed")
+    enabled = "ENABLED" if t.get("enabled", False) else "DISABLED"
+    src = t.get("source", "")
+    exists = "YES" if os.path.exists(src) else "NO"
+    print(f"{name:<20} | {enabled:<8} | {exists:<7} | {src:<40}")
 
-print('========================================================================================================')
-"
+print("========================================================================================================")
+' "${TARGETS_FILE}"
 }
 
 cmd_verify() {
-    python3 -c "
+    python3 -c '
 import sys, os, yaml
 
-targets_file = '${TARGETS_FILE}'
+targets_file = sys.argv[1]
 if not os.path.exists(targets_file):
-    print(f'[-] Targets file not found: {targets_file}', file=sys.stderr)
+    print(f"[-] Targets file not found: {targets_file}", file=sys.stderr)
     sys.exit(1)
 
-with open(targets_file, 'r', encoding='utf-8') as f:
+with open(targets_file, "r", encoding="utf-8") as f:
     data = yaml.safe_load(f) or {}
 
-targets = [t for t in data.get('targets', []) if t.get('enabled', False)]
+targets = [t for t in data.get("targets", []) if t.get("enabled", False)]
 
-print(f'[*] Verifying {len(targets)} enabled backup targets...')
+print(f"[*] Verifying {len(targets)} enabled backup targets...")
 all_ok = True
 for t in targets:
-    name = t.get('name', 'unnamed')
-    src = t.get('source', '')
+    name = t.get("name", "unnamed")
+    src = t.get("source", "")
     if os.path.exists(src):
         readable = os.access(src, os.R_OK)
-        status = '[✓ PASS]' if readable else '[✗ NO READ]'
+        status = "[✓ PASS]" if readable else "[✗ NO READ]"
         if not readable:
             all_ok = False
-        print(f'{status} {name}: {src} (Accessible and readable)')
+        print(f"{status} {name}: {src} (Accessible and readable)")
     else:
-        print(f'[! NOTE] {name}: {src} (Not mounted in current execution environment; verify inside container CT 602)')
+        print(f"[! NOTE] {name}: {src} (Not mounted in current execution environment; verify inside container CT 602)")
 
-print('[+] Verification check completed.')
-"
+print("[+] Verification check completed.")
+' "${TARGETS_FILE}"
 }
 
 cmd_set_status() {
     local target_name="$1"
     local new_status="$2"
 
-    python3 -c "
+    python3 -c '
 import sys, os, yaml
 
-targets_file = '${TARGETS_FILE}'
-name = '${target_name}'
-status = True if '${new_status}' == 'true' else False
+targets_file = sys.argv[1]
+name = sys.argv[2]
+status = True if sys.argv[3] == "true" else False
 
-with open(targets_file, 'r', encoding='utf-8') as f:
+with open(targets_file, "r", encoding="utf-8") as f:
     data = yaml.safe_load(f) or {}
 
 found = False
-for t in data.get('targets', []):
-    if t.get('name') == name:
-        t['enabled'] = status
+for t in data.get("targets", []):
+    if t.get("name") == name:
+        t["enabled"] = status
         found = True
         break
 
 if not found:
-    print(f'[-] Target \"{name}\" not found in {targets_file}', file=sys.stderr)
+    print(f"[-] Target \"{name}\" not found in {targets_file}", file=sys.stderr)
     sys.exit(1)
 
-with open(targets_file, 'w', encoding='utf-8') as f:
+with open(targets_file, "w", encoding="utf-8") as f:
     yaml.dump(data, f, default_flow_style=False, sort_keys=False)
 
-action = 'enabled' if status else 'disabled'
-print(f'[+] Target \"{name}\" successfully {action}.')
-"
+action = "enabled" if status else "disabled"
+print(f"[+] Target \"{name}\" successfully {action}.")
+' "${TARGETS_FILE}" "${target_name}" "${new_status}"
 }
 
 cmd_remove() {
     local target_name="$1"
 
-    python3 -c "
+    python3 -c '
 import sys, os, yaml
 
-targets_file = '${TARGETS_FILE}'
-name = '${target_name}'
+targets_file = sys.argv[1]
+name = sys.argv[2]
 
-with open(targets_file, 'r', encoding='utf-8') as f:
+with open(targets_file, "r", encoding="utf-8") as f:
     data = yaml.safe_load(f) or {}
 
-orig_len = len(data.get('targets', []))
-data['targets'] = [t for t in data.get('targets', []) if t.get('name') != name]
+orig_len = len(data.get("targets", []))
+data["targets"] = [t for t in data.get("targets", []) if t.get("name") != name]
 
-if len(data['targets']) == orig_len:
-    print(f'[-] Target \"{name}\" not found in {targets_file}', file=sys.stderr)
+if len(data.get("targets", [])) == orig_len:
+    print(f"[-] Target \"{name}\" not found in {targets_file}", file=sys.stderr)
     sys.exit(1)
 
-with open(targets_file, 'w', encoding='utf-8') as f:
+with open(targets_file, "w", encoding="utf-8") as f:
     yaml.dump(data, f, default_flow_style=False, sort_keys=False)
 
-print(f'[+] Target \"{name}\" successfully removed.')
-"
+print(f"[+] Target \"{name}\" successfully removed from {targets_file}.")
+' "${TARGETS_FILE}" "${target_name}"
 }
 
 cmd_add() {
@@ -206,50 +215,50 @@ cmd_add() {
         exit 1
     fi
 
-    python3 -c "
+    python3 -c '
 import sys, os, yaml
 
-targets_file = '${TARGETS_FILE}'
-name = '${name}'
-path = '${path}'
-desc = '${desc}' or f'Backup target for {name}'
-exclude_raw = '${exclude}'
-exclude = [x.strip() for x in exclude_raw.split(',') if x.strip()] if exclude_raw else ['*.tmp']
+targets_file = sys.argv[1]
+name = sys.argv[2]
+path = sys.argv[3]
+desc = sys.argv[4] or f"Backup target for {name}"
+exclude_raw = sys.argv[5]
+exclude = [x.strip() for x in exclude_raw.split(",") if x.strip()] if exclude_raw else ["*.tmp"]
 
 data = {}
 if os.path.exists(targets_file):
-    with open(targets_file, 'r', encoding='utf-8') as f:
+    with open(targets_file, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
 
-if 'targets' not in data:
-    data['targets'] = []
+if "targets" not in data:
+    data["targets"] = []
 
 updated = False
-for t in data['targets']:
-    if t.get('name') == name:
-        t['source'] = path
-        t['description'] = desc
-        t['enabled'] = True
-        t['exclude'] = exclude
+for t in data["targets"]:
+    if t.get("name") == name:
+        t["source"] = path
+        t["description"] = desc
+        t["enabled"] = True
+        t["exclude"] = exclude
         updated = True
         break
 
 if not updated:
-    data['targets'].append({
-        'name': name,
-        'source': path,
-        'description': desc,
-        'enabled': True,
-        'exclude': exclude
+    data["targets"].append({
+        "name": name,
+        "source": path,
+        "description": desc,
+        "enabled": True,
+        "exclude": exclude
     })
 
 os.makedirs(os.path.dirname(targets_file), exist_ok=True)
-with open(targets_file, 'w', encoding='utf-8') as f:
+with open(targets_file, "w", encoding="utf-8") as f:
     yaml.dump(data, f, default_flow_style=False, sort_keys=False)
 
-action = 'updated' if updated else 'added'
-print(f'[+] Target \"{name}\" ({path}) successfully {action}.')
-"
+action = "updated" if updated else "added"
+print(f"[+] Target \"{name}\" ({path}) successfully {action}.")
+' "${TARGETS_FILE}" "${name}" "${path}" "${desc}" "${exclude}"
 }
 
 # CLI routing

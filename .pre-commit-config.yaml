@@ -49,6 +49,7 @@ repos:
       - id: gitleaks
         name: Gitleaks Secret Detection
         description: Scans staged commits for API keys, passwords, and sensitive tokens
+        args: ["--config=.gitleaks.toml"]
 
   # ----------------------------------------------------------------------------
   # 3. Shell Script Linting & Static Analysis (ShellCheck)
