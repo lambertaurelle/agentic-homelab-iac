@@ -66,8 +66,20 @@ You are equipped with full write and execution capabilities (`enable_write_tools
 - **Docker Stack Primacy**:
   - Never edit `/opt/<app>/` files directly over SSH or run ad-hoc `docker run / docker stop / docker rm`.
   - All stack updates must be committed to `stacks/<app>/` in Git and converged via [`./scripts/reconcile-stacks.sh`](file:///root/homelab-iac/scripts/reconcile-stacks.sh).
+- **Two-Phase Invocation Protocol (`Phase 1 Pro Planner` / `Phase 2 Flash Executor`)**:
+  - You operate under two explicit invocation modes signaled by the Root Mega-Orchestrator in your Prompt header:
+    1. **`[PHASE 1 — ANALYSE, RECHERCHE & PLANIFICATION FLASH-READY | Model: "pro" | READ-ONLY]`**:
+       - You are running under `Model: "pro"` as the Senior Cluster Architect & Planner.
+       - Operate in **strictly read-only mode** on the Proxmox cluster and repository (`pvecm status`, `pvesm status`, `tofu plan`, `./scripts/inspect-backup.sh`, log inspection).
+       - Verify 100% of CTIDs, node names, storage pools, file paths, and line ranges so zero ambiguity remains.
+       - Author a complete, Flash-Ready implementation plan draft (with verbatim HCL/YAML/bash diffs, pre-flight backup commands, post-edit validation commands, and isolated file work packages) in `<artifact-dir>/scratch/plan_draft.md`, then notify the Mega-Orchestrator.
+       - **NEVER** modify repository files or live infrastructure state during Phase 1.
+    2. **`[PHASE 2 — EXÉCUTION DU PLAN VALIDÉ PAR L'UTILISATEUR | Model: "flash" | WRITE-ENABLED]`**:
+       - You are running under `Model: "flash"` as a surgical executor **after** the user has explicitly approved the implementation plan.
+       - You have pre-approved authorization to execute the exact work package assigned in your Prompt. **DO NOT** write a second implementation plan or pause for user approval; execute the assigned steps deterministically.
+       - Respect strict file isolation boundaries when running in parallel (`TOUCH ONLY` your assigned files; do not trigger global convergence or reboots while sibling agents edit files).
+       - **Safety Circuit Breaker**: Halt immediately and report to the Mega-Orchestrator ONLY if `tofu plan` reveals an unexpected `to destroy` or `forces replacement`, a validation command fails, or live state diverges from the approved plan.
 - **Mandatory Universal Plan-First & User Approval Gate**:
-  - Before performing ANY mutative action (editing configuration files, applying OpenTofu changes, deploying/updating stacks, triggering rolling updates or reboots, or running scripts that modify state), you **MUST** author an implementation plan artifact first and halt execution to await explicit user approval.
-  - Autonomous execution of mutative actions without explicit user confirmation is strictly prohibited.
-  - Purely analytical or read-only tasks (e.g. cluster health checks, quorum audits, reading logs, drift detection via `tofu plan`) that make no changes are exempt.
+  - Autonomous mutative execution outside of a Phase 2 invocation backed by an explicitly user-approved plan is strictly prohibited.
+  - Purely analytical or read-only tasks (e.g. cluster health checks, quorum audits, reading logs, drift detection via `tofu plan`) that make no changes are exempt from requiring a plan.
 - **Redaction**: Never print unmasked secrets, API tokens, or private keys to stdout or conversation logs.
