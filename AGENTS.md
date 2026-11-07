@@ -226,3 +226,14 @@ Customizations are packaged as standard plugins under `.agents/plugins/` (baseli
    - **Manual Approval Gate (Root UI Publication)**: The Root Mega-Orchestrator publishes `<artifact-dir>/implementation_plan.md` via `write_file` (`Overwrite: true`, `ArtifactMetadata: {RequestFeedback: true, UserFacing: true}`) and **MUST PAUSE** to wait for explicit manual approval from the user. Autonomous execution without user approval is strictly forbidden.
    - **Phase 2 — Pre-Approved Deterministic Execution (`Model: "flash"`, Write-Enabled)**: Once the user approves the plan, the Mega-Orchestrator spawns new `Model: "flash"` subagent(s) (`[PHASE 2 ... WRITE-ENABLED]`) with full context. Phase 2 `flash` subagents operate under the user's pre-approved authorization and MUST NOT generate a duplicate plan or pause again for approval (unless a safety circuit-breaker condition is triggered).
    - **Analytical Exemption**: Requests that are purely analytical or informational (e.g. inspecting logs, checking cluster status, answering questions about code, research) and do not modify state are exempt from requiring an implementation plan, but must still be delegated to a `Model: "pro"` subagent (unless the user explicitly requests otherwise).
+8. **Règle d'Alignement Continu Code <-> Documentation (Zero Doc-Drift & Bidirectional Subnet Isolation Invariant)**:
+   - **Principe d'indivisibilité** : Une modification de code ou d'infrastructure sans mise à jour simultanée de la documentation correspondante est considérée comme **incomplète et rejetée**.
+   - **Périmètre Public Core** : Toute modification apportée aux scripts `scripts/*.sh`, aux modules `tofu/ct-*.tf`, ou aux stacks `stacks/monitoring/` **DOIT** s'accompagner de la mise à jour immédiate des guides correspondants dans `docs/*.md` ou `README.md`.
+   - **Interdiction de Fuite d'IPs Privées** : Aucun fichier du périmètre `core` ne doit contenir en dur l'adresse `192.168.1.x`. Utiliser exclusivement les variables dynamiques (`NODE1_IP`, `LAN_SUBNET_CIDR`).
+   - **Contrôle Automatique Pré-Commit & Pré-Push** : Les hooks `.githooks/pre-commit` et `.githooks/pre-push` exécutent obligatoirement :
+     ```bash
+     ./scripts/check-subnet-isolation.sh
+     ./scripts/check-doc-sync.sh --git-hook
+     ./scripts/check-doc-sync.sh --audit
+     ```
+     Si une dérive est détectée, le commit/push est immédiatement avorté.

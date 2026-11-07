@@ -1,0 +1,109 @@
+{
+  "skill": "gemini-share-extractor",
+  "queries": [
+    {
+      "quadrant": "Q1_direct",
+      "query": "Extract the full conversation from https://share.gemini.google/1axeeTc70Blh and summarize the main points.",
+      "expect": "trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q1_direct",
+      "query": "Peux tu récupérer le contenu de cette conversation https://share.gemini.google/1axeeTc70Blh et générer un /plan ?",
+      "expect": "trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q1_direct",
+      "query": "Read this shared Gemini chat link https://gemini.google.com/share/9887841848de and list the action items.",
+      "expect": "trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q1_direct",
+      "query": "Fetch the transcript of https://g.co/gemini/share/abcdef123456 into a markdown file.",
+      "expect": "trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q2_colloquial",
+      "query": "Here is what I discussed with Gemini on my phone earlier: https://share.gemini.google/xyz987 — can we implement this?",
+      "expect": "trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q2_colloquial",
+      "query": "J'ai commencé à réfléchir à l'architecture sur l'appli Gemini, voici le lien partagé https://gemini.google.com/share/445566aabbcc",
+      "expect": "trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q2_colloquial",
+      "query": "Take a look at https://share.gemini.google/9kLmN2pQ and tell me if the YAML it suggested is valid.",
+      "expect": "trigger",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q2_colloquial",
+      "query": "Reprends la discussion https://gemini.google.com/share/112233445566 là où on s'était arrêté.",
+      "expect": "trigger",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q3_near_miss",
+      "query": "Check what we did in conversation://c4bc459a-72d8-4b2e-943d-a1d5f90581eb earlier today.",
+      "expect": "no-trigger",
+      "note": "Local Antigravity conversation URI read from .system_generated/logs/transcript.jsonl, not a web share.gemini.google link.",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q3_near_miss",
+      "query": "Read this shared Google Doc https://docs.google.com/document/d/1U1imwF7_h56PGRm_nByzrKXVdBMsA29bf4zPmqIFdfQ/edit",
+      "expect": "no-trigger",
+      "note": "Google Docs URL, not a Gemini shared conversation link.",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q3_near_miss",
+      "query": "How do I configure Gemini CLI settings in ~/.gemini/config/config.json?",
+      "expect": "no-trigger",
+      "note": "About Antigravity/Gemini CLI configuration, handled by antigravity-guide.",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q3_near_miss",
+      "query": "Share the Proxmox backup status report with me.",
+      "expect": "no-trigger",
+      "note": "Uses the word 'share' but is a Proxmox backup status request.",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q4_sibling_adjacent",
+      "query": "Audit the Home Assistant automations and check for unavailable entities.",
+      "expect": "no-trigger",
+      "note": "Home Assistant health audit handled by haos-health / @haos-ops.",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q4_sibling_adjacent",
+      "query": "Create a new skill for extracting data from Notion pages.",
+      "expect": "no-trigger",
+      "note": "Skill authoring request handled by skill-creator.",
+      "split": "val"
+    },
+    {
+      "quadrant": "Q4_sibling_adjacent",
+      "query": "Check Proxmox cluster health and OpenTofu drift.",
+      "expect": "no-trigger",
+      "note": "Handled by proxmox-cluster-health / @proxmox-ops.",
+      "split": "train"
+    },
+    {
+      "quadrant": "Q4_sibling_adjacent",
+      "query": "Evaluate the quality of .agents/plugins/proxmox-iac/skills/proxmox-bootstrap",
+      "expect": "no-trigger",
+      "note": "Skill evaluation request handled by skill-evaluator.",
+      "split": "val"
+    }
+  ]
+}

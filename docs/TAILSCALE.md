@@ -12,7 +12,7 @@ This document describes how to deploy, configure, and maintain the **Tailscale S
 | **Target Node** | `var.utility_node_name` (`node-1`) |
 | **LXC Mode** | Unprivileged (`unprivileged = true`) with `/dev/net/tun` character device passthrough |
 | **OS Template** | Debian 12 (Bookworm) Standard |
-| **Capabilities** | - Subnet Router (advertises LAN subnet e.g. `10.0.0.0/24` or `192.168.1.0/24`)<br>- Tailscale SSH Server (secure, zero-trust SSH access from any device in your Tailnet)<br>- Kernel IP forwarding (IPv4 and IPv6) with UDP GRO network acceleration |
+| **Capabilities** | - Subnet Router (advertises LAN subnet e.g. `10.0.0.0/24` or `192.168.0.0/24`)<br>- Tailscale SSH Server (secure, zero-trust SSH access from any device in your Tailnet)<br>- Kernel IP forwarding (IPv4 and IPv6) with UDP GRO network acceleration |
 
 ---
 

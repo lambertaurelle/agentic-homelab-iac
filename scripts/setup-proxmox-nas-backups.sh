@@ -9,9 +9,10 @@
 #   2. Backup retention policy: keep-daily=3, keep-weekly=2
 #   3. Dump directory permissions (/mnt/pve/syno-backup/dump)
 #   4. Multi-node storage activation across 'node-1' and 'node-2'
-#   5. Automated daily snapshot backups for all LXC containers cluster-wide (--all 1):
-#      Automatically includes all current and future guest containers/workloads
-#      Scheduled at 03:00 AM daily with zstd compression & failure alerts
+#   5. Automated daily snapshot backups for all 13 active LXC containers:
+#      Includes: 101 102 201 301 501 502 510 511 520 701 702 801 900
+#      Explicitly excludes ephemeral CT 602 and stopped containers (401, 601, 901, 902)
+#      Scheduled at 03:00 AM daily with uncompressed snapshot mode & failure alerts
 # ==============================================================================
 set -euo pipefail
 
@@ -31,11 +32,11 @@ NFS_EXPORT="${NFS_EXPORT:-/mnt/nas/data}"
 STORAGE_ID="syno-backup"
 STORAGE_PATH="/mnt/pve/syno-backup"
 PRUNE_RETENTION="keep-daily=3,keep-weekly=2"
-BACKUP_ALL="1"
+BACKUP_CTS="101 102 201 301 501 502 510 511 520 701 702 801 900"
 # shellcheck disable=SC2034
 BACKUP_SCHEDULE_TIME="03:00"
 BACKUP_MODE="snapshot"
-BACKUP_COMPRESS="zstd"
+BACKUP_COMPRESS="0"
 BACKUP_MAILNOTIFY="failure"
 
 echo "=============================================================================="
@@ -150,7 +151,7 @@ run_on_master "cat << 'CRONEOF' > /etc/pve/vzdump.cron
 
 PATH=\"/usr/sbin:/usr/bin:/sbin:/bin\"
 
-0 3 * * *           root vzdump --all ${BACKUP_ALL} --compress ${BACKUP_COMPRESS} --mailnotification ${BACKUP_MAILNOTIFY} --mode ${BACKUP_MODE} --storage ${STORAGE_ID}
+0 3 * * *           root vzdump ${BACKUP_CTS} --compress ${BACKUP_COMPRESS} --mailnotification ${BACKUP_MAILNOTIFY} --mode ${BACKUP_MODE} --storage ${STORAGE_ID}
 CRONEOF"
 
 echo "[+] vzdump.cron updated successfully on cluster filesystem (/etc/pve)."

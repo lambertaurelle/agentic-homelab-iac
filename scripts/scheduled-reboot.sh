@@ -3,17 +3,18 @@
 # Homelab Safety-First Scheduled Rolling Reboot Engine
 # ==============================================================================
 # Target Schedule:
-#   - Node 1 (node-1): Sunday 05:00 AM
-#   - Node 2 (node-2): Monday 05:00 AM
+#   - Node 1 (node-1): Sunday 05:15 AM
+#   - Node 2 (node-2): Monday 05:15 AM
 #
 # Pre-Reboot Safety Guards:
 #   1. Peer Node Ping Reachability: Verifies peer host is alive.
 #   2. Peer AdGuard DNS Resolution:
 #      - On node-1: Validates DNS query against secondary AdGuard.
 #      - On node-2: Validates DNS query against primary AdGuard.
-#   3. Aborts safely if peer is unhealthy and logs error to /var/log/homelab-reboot.log.
-#   4. If peer is healthy, executes disk sync & systemctl reboot.
-#   5. Supports --dry-run / --check to test health checks without rebooting.
+#   3. Active Operations Check (VZDump backup, CT 602 offsite streaming, update-cluster-stack.sh).
+#   4. Aborts safely if peer or operations unhealthy and alerts via Discord.
+#   5. If all guards pass, executes disk sync & systemctl reboot.
+#   6. Supports --dry-run / --check to test health checks without rebooting.
 # ==============================================================================
 set -euo pipefail
 
@@ -99,6 +100,40 @@ log_header() {
     log "=============================================================================="
 }
 
+DISCORD_WEBHOOK="${DISCORD_MONITORING_WEBHOOK_URL:-${DISCORD_WEBHOOK_URL:-}}"
+
+send_reboot_abort_alert() {
+    local reason_title="$1"
+    local reason_desc="$2"
+    local color="${3:-15105570}" # Orange by default
+
+    if [ -z "${DISCORD_WEBHOOK}" ] || [ "${DRY_RUN}" = true ]; then
+        return 0
+    fi
+
+    local payload
+    payload=$(python3 -c "
+import json, sys
+data = {
+    'embeds': [{
+        'title': sys.argv[1],
+        'description': sys.argv[2],
+        'color': int(sys.argv[3]),
+        'fields': [
+            {'name': 'Node', 'value': sys.argv[4], 'inline': True},
+            {'name': 'Scheduled Time', 'value': '05:15 AM', 'inline': True}
+        ],
+        'footer': {'text': 'Homelab High Availability Engine • scheduled-reboot.sh'}
+    }]
+}
+print(json.dumps(data))
+" "${reason_title}" "${reason_desc}" "${color}" "${CURRENT_NODE}" 2>/dev/null || true)
+
+    if [ -n "${payload}" ]; then
+        curl -s -S -X POST -H "Content-Type: application/json" -H "User-Agent: Homelab-Ops/1.0" -d "${payload}" "${DISCORD_WEBHOOK}" >/dev/null 2>&1 || true
+    fi
+}
+
 # Determine Current Node
 if [ -n "${FORCE_NODE}" ]; then
     CURRENT_NODE="${FORCE_NODE}"
@@ -142,24 +177,26 @@ fi
 log "[*] Current Host:  ${CURRENT_NODE} (${CURRENT_IP})"
 log "[*] Target Peer:   ${PEER_NODE} (${PEER_IP})"
 log "[*] Peer AdGuard:  ${PEER_ADGUARD_IP}"
-log "[*] Target Day:    ${SCHEDULED_DAY} (05:00 AM)"
+log "[*] Target Day:    ${SCHEDULED_DAY} (05:15 AM)"
 
 # ==============================================================================
 # PRE-REBOOT SAFETY GUARDS
 # ==============================================================================
 
 # Guard 1: Peer Node Ping Reachability
-log "[*] Guard 1/2: Testing peer node reachability (ping ${PEER_IP})..."
+log "[*] Guard 1/3: Testing peer node reachability (ping ${PEER_IP})..."
 if ping -c 3 -W 2 "${PEER_IP}" >/dev/null 2>&1; then
     log "[+] Guard 1 PASSED: Peer host ${PEER_NODE} (${PEER_IP}) is responsive."
 else
     log "[-] CRITICAL FAILURE: Guard 1 FAILED! Peer host ${PEER_NODE} (${PEER_IP}) is UNREACHABLE."
     log "[-] ABORTING REBOOT: Cluster high availability would be compromised."
+    send_reboot_abort_alert "🚨 Scheduled Reboot Aborted on ${CURRENT_NODE}" \
+        "Peer host **${PEER_NODE}** (${PEER_IP}) is unreachable. Reboot aborted to prevent total cluster split-brain." "15158332"
     exit 2
 fi
 
 # Guard 2: Peer AdGuard DNS Resolution
-log "[*] Guard 2/2: Testing peer AdGuard DNS resolution (@${PEER_ADGUARD_IP} ${TEST_DOMAIN})..."
+log "[*] Guard 2/3: Testing peer AdGuard DNS resolution (@${PEER_ADGUARD_IP} ${TEST_DOMAIN})..."
 DNS_RESOLVED=false
 
 if command -v dig >/dev/null 2>&1; then
@@ -179,8 +216,31 @@ if [ "${DNS_RESOLVED}" = true ]; then
 else
     log "[-] CRITICAL FAILURE: Guard 2 FAILED! Peer AdGuard (${PEER_ADGUARD_IP}) failed DNS resolution."
     log "[-] ABORTING REBOOT: DNS outage would occur if current node restarts."
+    send_reboot_abort_alert "🚨 Scheduled Reboot Aborted on ${CURRENT_NODE}" \
+        "Peer AdGuard DNS (**${PEER_ADGUARD_IP}**) failed query resolution. Reboot aborted to preserve LAN DNS availability." "15158332"
     exit 3
 fi
+
+# Guard 3: Active Operations Protection (VZDump, CT 602, and Updates)
+log "[*] Guard 3/3: Verifying no active backups or updates in progress..."
+ACTIVE_OP=""
+
+if pgrep -x vzdump >/dev/null 2>&1; then
+    ACTIVE_OP="Local VZDump snapshot backup is currently active"
+elif pct status 602 2>/dev/null | grep -q 'running'; then
+    ACTIVE_OP="Ephemeral offsite backup container (CT 602) is currently streaming to cloud"
+elif pgrep -f update-cluster-stack.sh >/dev/null 2>&1; then
+    ACTIVE_OP="Cluster update stack engine (update-cluster-stack.sh) is currently running"
+fi
+
+if [ -n "${ACTIVE_OP}" ]; then
+    log "[-] CRITICAL FAILURE: Guard 3 FAILED! ${ACTIVE_OP}."
+    log "[-] ABORTING REBOOT: Rebooting now would corrupt backups or disrupt updates."
+    send_reboot_abort_alert "⚠️ Scheduled Reboot Postponed on ${CURRENT_NODE}" \
+        "Reboot aborted because critical workload is active: **${ACTIVE_OP}**." "15105570"
+    exit 4
+fi
+log "[+] Guard 3 PASSED: No active backup or update processes detected."
 
 # ==============================================================================
 # REBOOT INVOCATION

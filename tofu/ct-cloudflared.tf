@@ -67,6 +67,7 @@ resource "proxmox_virtual_environment_container" "cloudflared_primary" {
   }
 
   lifecycle {
+    prevent_destroy = true
     ignore_changes = [
       mount_point,
       device_passthrough,
@@ -140,6 +141,7 @@ resource "proxmox_virtual_environment_container" "cloudflared_secondary" {
   }
 
   lifecycle {
+    prevent_destroy = true
     ignore_changes = [
       mount_point,
       device_passthrough,

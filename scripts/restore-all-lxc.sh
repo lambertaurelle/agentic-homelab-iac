@@ -33,25 +33,41 @@ run_on_node() {
     local node="$1"
     local cmd="$2"
     local target_host="${NODE1_IP}"
-    if [ "${node}" = "node-2" ] || [ "${node}" = "2" ] || [ "${node}" = "${NODE2_IP}" ]; then
+    if [ "${node}" = "node-2" ] || [ "${node}" = "2" ] || [ "${node}" = "${NODE2_IP}" ] || [ "${node}" = "tuxmox" ]; then
         target_host="${NODE2_IP}"
     fi
 
     if ip addr show 2>/dev/null | grep -q "${target_host}" || [[ "${target_host}" == "localhost" ]] || [[ "${target_host}" == "127.0.0.1" ]]; then
+        bash -c "${cmd}"
+    elif command -v pct >/dev/null 2>&1 && [[ "$(hostname -s 2>/dev/null)" == "${node}" ]]; then
         bash -c "${cmd}"
     else
         ssh -o StrictHostKeyChecking=no "root@${target_host}" "${cmd}"
     fi
 }
 
-# Helper to run a command on cluster master (node-1)
+# Helper to run a command on cluster master or reachable cluster peer
 run_on_master() {
     local cmd="$1"
+    # 1. Try local node if hypervisor tools present
+    if command -v pvesh >/dev/null 2>&1 || command -v pct >/dev/null 2>&1; then
+        bash -c "${cmd}"
+        return 0
+    fi
+
+    # 2. Try NODE1_IP
     if ip addr show 2>/dev/null | grep -q "${NODE1_IP}" || [[ "${NODE1_IP}" == "localhost" ]] || [[ "${NODE1_IP}" == "127.0.0.1" ]]; then
         bash -c "${cmd}"
-    else
-        ssh -o StrictHostKeyChecking=no "root@${NODE1_IP}" "${cmd}"
+        return 0
+    elif ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 -o BatchMode=yes "root@${NODE1_IP}" "${cmd}" 2>/dev/null; then
+        return 0
+    # 3. Fallback to NODE2_IP if node-1 is unreachable
+    elif ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 -o BatchMode=yes "root@${NODE2_IP}" "${cmd}" 2>/dev/null; then
+        return 0
     fi
+
+    # 4. Final attempt with standard SSH error output
+    ssh -o StrictHostKeyChecking=no "root@${NODE1_IP}" "${cmd}"
 }
 
 # Dynamic container name discovery
@@ -276,21 +292,32 @@ restore_container() {
         "
     fi
 
-    # 7. Start container if requested
-    if [ "${auto_start}" = "yes" ]; then
-        echo "[*] Starting restored container ${ctid} on ${target_node}..."
-        run_on_node "${target_node}" "pct start ${ctid}"
-        sleep 3
-        local final_status
-        final_status=$(run_on_node "${target_node}" "pct status ${ctid} 2>/dev/null || true")
-        echo "[+] Container ${ctid} status on ${target_node}: ${final_status}"
-    fi
-
-    # 8. Invoke Instance Post-Restore Hook (if present)
+    # 7. Invoke Instance Post-Restore Hook (if present) BEFORE starting container
     local post_hook="${REPO_ROOT}/scripts/instance/post-restore-hook.sh"
     if [ -f "${post_hook}" ]; then
         echo "[*] Executing post-restore hook at ${post_hook}..."
         bash "${post_hook}" "${ctid}" "${target_node}" || true
+    fi
+
+    # 8. Start container if requested and configured to boot (respect onboot: 0)
+    if [ "${auto_start}" = "yes" ]; then
+        local ct_onboot="1"
+        local onboot_val
+        onboot_val=$(run_on_node "${target_node}" "grep -E '^onboot:' /etc/pve/lxc/${ctid}.conf 2>/dev/null | awk '{print \$2}' || true")
+        if [ "${onboot_val}" = "0" ]; then
+            ct_onboot="0"
+        fi
+
+        if [ "${ct_onboot}" = "1" ]; then
+            echo "[*] Starting restored container ${ctid} on ${target_node} (onboot: 1)..."
+            run_on_node "${target_node}" "pct start ${ctid}"
+            sleep 3
+            local final_status
+            final_status=$(run_on_node "${target_node}" "pct status ${ctid} 2>/dev/null || true")
+            echo "[+] Container ${ctid} status on ${target_node}: ${final_status}"
+        else
+            echo "[*] Restored container ${ctid} has onboot: 0 (declared stopped). Leaving stopped."
+        fi
     fi
 
     echo "[+] Restoration of CT ${ctid} completed successfully."

@@ -28,6 +28,7 @@ SYNC_HASH="${ADGUARD_SYNC_HASH:-}"
 
 # Parse subnet prefix for reverse PTR and DHCP pool calculations
 IFS='.' read -r o1 o2 o3 _ <<< "${PRIMARY_IP}"
+# shellcheck disable=SC2034
 REVERSE_ARPA="${o3}.${o2}.${o1}.in-addr.arpa"
 DHCP_RANGE_START="${DHCP_RANGE_START:-${o1}.${o2}.${o3}.100}"
 DHCP_RANGE_END="${DHCP_RANGE_END:-${o1}.${o2}.${o3}.250}"
@@ -101,8 +102,6 @@ dns:
   refuse_any: true
   upstream_dns:
     - https://dns10.quad9.net/dns-query
-    - "[/lan/]${PRIMARY_IP}"
-    - "[/${REVERSE_ARPA}/]${PRIMARY_IP}"
   upstream_dns_file: ""
   bootstrap_dns:
     - 9.9.9.10

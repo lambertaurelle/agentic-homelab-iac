@@ -3,20 +3,26 @@
 # Homelab Maintenance Automation & Cron Installation Setup
 # ==============================================================================
 # Installs and synchronizes:
-#   1. Daily update cron job (05:00 AM daily) on node-1 & node-2:
-#      0 5 * * * /root/homelab-iac/scripts/update-cluster-stack.sh >> /var/log/homelab-updates.log 2>&1
+#   1. Daily staggered update cron jobs:
+#      - node-1: 04:30 AM daily (with flock mutex)
+#        30 4 * * * /usr/bin/flock -n /var/run/homelab-updates.lock /root/homelab-iac/scripts/update-cluster-stack.sh --node node-1 >> /var/log/homelab-updates.log 2>&1
+#      - node-2: 04:45 AM daily (with flock mutex)
+#        45 4 * * * /usr/bin/flock -n /var/run/homelab-updates.lock /root/homelab-iac/scripts/update-cluster-stack.sh --node node-2 >> /var/log/homelab-updates.log 2>&1
 #
-#   2. Daily security audit cron job (05:30 AM daily) on node-1:
-#      30 5 * * * /root/homelab-iac/scripts/scan-security.sh --discord --report >> /var/log/homelab-security-audit.log 2>&1
+#   2. Daily security audit cron job (05:45 AM daily) on node-1:
+#      45 5 * * * if pct status 900 2>/dev/null | grep -q 'running'; then pct exec 900 -- /root/homelab-iac/scripts/scan-security.sh --discord --report; else /root/homelab-iac/scripts/scan-security.sh --discord --report; fi >> /var/log/homelab-security-audit.log 2>&1
 #
-#   3. Weekly rolling reboot cron jobs:
-#      - node-1: Sunday 04:00 AM
-#        0 4 * * 0 /root/homelab-iac/scripts/scheduled-reboot.sh >> /var/log/homelab-reboot.log 2>&1
-#      - node-2: Monday 04:00 AM
-#        0 4 * * 1 /root/homelab-iac/scripts/scheduled-reboot.sh >> /var/log/homelab-reboot.log 2>&1
+#   3. Weekly rolling reboot cron jobs (05:15 AM):
+#      - node-1: Sunday 05:15 AM
+#        15 5 * * 0 /root/homelab-iac/scripts/scheduled-reboot.sh >> /var/log/homelab-reboot.log 2>&1
+#      - node-2: Monday 05:15 AM
+#        15 5 * * 1 /root/homelab-iac/scripts/scheduled-reboot.sh >> /var/log/homelab-reboot.log 2>&1
 #
-#   4. Syncs scripts to /root/homelab-iac/scripts on both nodes with executable permissions.
-#   5. Verifies active crontab configuration on both nodes.
+#   4. Daily Morning SRE Proactive Health Check (06:00 AM daily) on CT 900:
+#      0 6 * * * /root/homelab-iac/scripts/daily-sre-check.sh >> /var/log/daily-sre-check.log 2>&1
+#
+#   5. Logrotate (/etc/logrotate.d/homelab-maintenance) and Journald size limits (100M).
+#   6. Syncs scripts (including scripts/instance/) to /root/homelab-iac/scripts on both nodes.
 # ==============================================================================
 set -euo pipefail
 
@@ -60,6 +66,14 @@ sync_scripts_to_node() {
         cp -a "${SCRIPT_DIR}"/*.sh /root/homelab-iac/scripts/ 2>/dev/null || true
         cp -a "${SCRIPT_DIR}/lib"/* /root/homelab-iac/scripts/lib/ 2>/dev/null || true
         chmod +x /root/homelab-iac/scripts/*.sh 2>/dev/null || true
+
+        # Synchronize private instance scripts if present
+        if [ -d "${SCRIPT_DIR}/instance" ]; then
+            mkdir -p /root/homelab-iac/scripts/instance
+            cp -a "${SCRIPT_DIR}/instance"/* /root/homelab-iac/scripts/instance/ 2>/dev/null || true
+            chmod +x /root/homelab-iac/scripts/instance/*.sh 2>/dev/null || true
+        fi
+
         if [ -f "${BASE_DIR}/homelab-secrets.env" ]; then
             cp -a "${BASE_DIR}/homelab-secrets.env" /root/homelab-iac/homelab-secrets.env 2>/dev/null || true
             chmod 600 /root/homelab-iac/homelab-secrets.env 2>/dev/null || true
@@ -74,6 +88,14 @@ sync_scripts_to_node() {
         scp -o StrictHostKeyChecking=no "${SCRIPT_DIR}"/*.sh "root@${node_ip}:/root/homelab-iac/scripts/"
         scp -r -o StrictHostKeyChecking=no "${SCRIPT_DIR}/lib"/* "root@${node_ip}:/root/homelab-iac/scripts/lib/" 2>/dev/null || true
         ssh -o StrictHostKeyChecking=no "root@${node_ip}" "chmod +x /root/homelab-iac/scripts/*.sh"
+
+        # Synchronize private instance scripts if present
+        if [ -d "${SCRIPT_DIR}/instance" ]; then
+            ssh -o StrictHostKeyChecking=no "root@${node_ip}" "mkdir -p /root/homelab-iac/scripts/instance"
+            scp -r -o StrictHostKeyChecking=no "${SCRIPT_DIR}/instance"/* "root@${node_ip}:/root/homelab-iac/scripts/instance/" 2>/dev/null || true
+            ssh -o StrictHostKeyChecking=no "root@${node_ip}" "chmod +x /root/homelab-iac/scripts/instance/*.sh 2>/dev/null || true"
+        fi
+
         if [ -f "${BASE_DIR}/homelab-secrets.env" ]; then
             scp -o StrictHostKeyChecking=no "${BASE_DIR}/homelab-secrets.env" "root@${node_ip}:/root/homelab-iac/homelab-secrets.env" 2>/dev/null || true
             ssh -o StrictHostKeyChecking=no "root@${node_ip}" "chmod 600 /root/homelab-iac/homelab-secrets.env" 2>/dev/null || true
@@ -90,7 +112,7 @@ sync_scripts_to_node() {
 # ------------------------------------------------------------------------------
 # 1. Connectivity Check
 # ------------------------------------------------------------------------------
-echo "[*] Step 1/4: Checking cluster host reachability..."
+echo "[*] Step 1/6: Checking cluster host reachability..."
 if ! run_on_node "${NODE1_IP}" "true"; then
     echo "[-] Error: Cannot reach node-1 host at ${NODE1_IP}" >&2
     exit 1
@@ -106,17 +128,17 @@ echo "[+] Node 2 (${NODE2_IP}) is reachable."
 # ------------------------------------------------------------------------------
 # 2. Synchronize Scripts
 # ------------------------------------------------------------------------------
-echo "[*] Step 2/4: Deploying maintenance scripts to cluster nodes..."
+echo "[*] Step 2/6: Deploying maintenance scripts to cluster nodes..."
 sync_scripts_to_node "${NODE1_IP}" "node-1"
 sync_scripts_to_node "${NODE2_IP}" "node-2"
 
 # ------------------------------------------------------------------------------
 # 3. Configure Crontab on Nodes
 # ------------------------------------------------------------------------------
-echo "[*] Step 3/4: Installing cron schedules on node-1 and node-2..."
+echo "[*] Step 3/6: Installing cron schedules on node-1 and node-2..."
 
 # Node 1 Crontab Definition
-# Daily 05:00 AM update + Daily 05:30 AM security audit + Sunday 04:00 AM rolling reboot
+# Daily 04:30 AM update + Daily 05:45 AM security audit + Sunday 05:15 AM rolling reboot
 run_on_node "${NODE1_IP}" "bash -s" <<'CRON_NODE1_EOF'
 # Read current crontab excluding previous homelab maintenance entries
 EXISTING_CRON=$(crontab -l 2>/dev/null | grep -v 'update-cluster-stack\.sh' | grep -v 'scan-security\.sh' | grep -v 'scheduled-reboot\.sh' | grep -v '# Homelab Maintenance' || true)
@@ -125,15 +147,15 @@ EXISTING_CRON=$(crontab -l 2>/dev/null | grep -v 'update-cluster-stack\.sh' | gr
 cat <<EOF | crontab -
 ${EXISTING_CRON}
 # Homelab Maintenance Automation (Node: node-1)
-0 5 * * * /root/homelab-iac/scripts/update-cluster-stack.sh >> /var/log/homelab-updates.log 2>&1
-30 5 * * * if pct status 900 2>/dev/null | grep -q 'running'; then pct exec 900 -- /root/homelab-iac/scripts/scan-security.sh --discord --report; else /root/homelab-iac/scripts/scan-security.sh --discord --report; fi >> /var/log/homelab-security-audit.log 2>&1
-0 4 * * 0 /root/homelab-iac/scripts/scheduled-reboot.sh >> /var/log/homelab-reboot.log 2>&1
+30 4 * * * /usr/bin/flock -n /var/run/homelab-updates.lock /root/homelab-iac/scripts/update-cluster-stack.sh --node node-1 >> /var/log/homelab-updates.log 2>&1
+15 5 * * 0 /root/homelab-iac/scripts/scheduled-reboot.sh >> /var/log/homelab-reboot.log 2>&1
+45 5 * * * if pct status 900 2>/dev/null | grep -q 'running'; then pct exec 900 -- /root/homelab-iac/scripts/scan-security.sh --discord --report; else /root/homelab-iac/scripts/scan-security.sh --discord --report; fi >> /var/log/homelab-security-audit.log 2>&1
 EOF
 CRON_NODE1_EOF
 echo "[+] Crontab installed on node-1 (${NODE1_IP})."
 
 # Node 2 Crontab Definition
-# Daily 05:00 AM update + Monday 04:00 AM rolling reboot
+# Daily 04:45 AM update + Monday 05:15 AM rolling reboot
 run_on_node "${NODE2_IP}" "bash -s" <<'CRON_NODE2_EOF'
 # Read current crontab excluding previous homelab maintenance entries
 EXISTING_CRON=$(crontab -l 2>/dev/null | grep -v 'update-cluster-stack\.sh' | grep -v 'scheduled-reboot\.sh' | grep -v '# Homelab Maintenance' || true)
@@ -142,22 +164,83 @@ EXISTING_CRON=$(crontab -l 2>/dev/null | grep -v 'update-cluster-stack\.sh' | gr
 cat <<EOF | crontab -
 ${EXISTING_CRON}
 # Homelab Maintenance Automation (Node: node-2)
-0 5 * * * /root/homelab-iac/scripts/update-cluster-stack.sh >> /var/log/homelab-updates.log 2>&1
-0 4 * * 1 /root/homelab-iac/scripts/scheduled-reboot.sh >> /var/log/homelab-reboot.log 2>&1
+45 4 * * * /usr/bin/flock -n /var/run/homelab-updates.lock /root/homelab-iac/scripts/update-cluster-stack.sh --node node-2 >> /var/log/homelab-updates.log 2>&1
+15 5 * * 1 /root/homelab-iac/scripts/scheduled-reboot.sh >> /var/log/homelab-reboot.log 2>&1
 EOF
 CRON_NODE2_EOF
 echo "[+] Crontab installed on node-2 (${NODE2_IP})."
 
+# Local Crontab Configuration for CT 900 (Morning SRE Proactive Agent at 06:00 AM)
+if command -v crontab >/dev/null 2>&1 && [ -f "${SCRIPT_DIR}/daily-sre-check.sh" ]; then
+    EXISTING_CT_CRON=$(crontab -l 2>/dev/null | grep -v 'daily-sre-check\.sh' || true)
+    cat <<EOF | crontab -
+${EXISTING_CT_CRON}
+# Homelab Daily SRE Proactive Health Check (06:00 AM)
+0 6 * * * /root/homelab-iac/scripts/daily-sre-check.sh >> /var/log/daily-sre-check.log 2>&1
+EOF
+    echo "[+] Morning SRE check cron (06:00 AM) configured in local crontab."
+fi
+
 # ------------------------------------------------------------------------------
 # 4. Offsite Cloud Backup Schedule Setup
 # ------------------------------------------------------------------------------
-echo "[*] Step 4/5: Configuring offsite cloud backup schedule (03:45 AM)..."
+echo "[*] Step 4/6: Configuring offsite cloud backup schedule (03:45 AM)..."
 if [ -f "${SCRIPT_DIR}/setup-offsite-backup-schedule.sh" ]; then
     bash "${SCRIPT_DIR}/setup-offsite-backup-schedule.sh" || echo "[-] Notice: Offsite backup schedule setup skipped or container not ready yet."
 fi
 
 # ------------------------------------------------------------------------------
-# 5. Verification & Diagnostics
+# 5. Configure Logrotate & Journald Limits on Nodes
+# ------------------------------------------------------------------------------
+echo "[*] Step 5/6: Installing logrotate and journald configurations on cluster nodes..."
+
+LOGROTATE_CONF='cat << '\''LOGROTATE_EOF'\'' > /etc/logrotate.d/homelab-maintenance
+/var/log/homelab-updates.log
+/var/log/homelab-security-audit.log
+/var/log/homelab-reboot.log
+/var/log/homelab-offsite-backup.log {
+    weekly
+    rotate 4
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640 root root
+}
+LOGROTATE_EOF
+chmod 644 /etc/logrotate.d/homelab-maintenance'
+
+JOURNALD_CONF='mkdir -p /etc/systemd/journald.conf.d
+cat << '\''JOURNALD_EOF'\'' > /etc/systemd/journald.conf.d/homelab-size.conf
+[Journal]
+SystemMaxUse=100M
+SystemKeepFree=500M
+MaxRetentionSec=14day
+SystemMaxFileSize=25M
+JOURNALD_EOF
+systemctl restart systemd-journald 2>/dev/null || true
+journalctl --vacuum-size=100M --vacuum-time=14d 2>/dev/null || true'
+
+run_on_node "${NODE1_IP}" "${LOGROTATE_CONF}"
+run_on_node "${NODE2_IP}" "${LOGROTATE_CONF}"
+run_on_node "${NODE1_IP}" "${JOURNALD_CONF}"
+run_on_node "${NODE2_IP}" "${JOURNALD_CONF}"
+
+# Also configure locally on management container if running inside CT 900
+if [ -d /etc/systemd ]; then
+    mkdir -p /etc/systemd/journald.conf.d
+    cat << 'JOURNALD_EOF' > /etc/systemd/journald.conf.d/homelab-size.conf
+[Journal]
+SystemMaxUse=100M
+SystemKeepFree=500M
+MaxRetentionSec=14day
+SystemMaxFileSize=25M
+JOURNALD_EOF
+fi
+echo "[+] Logrotate & journald size limits deployed on cluster nodes."
+
+# ------------------------------------------------------------------------------
+# 6. Verification & Diagnostics
 # ------------------------------------------------------------------------------
 echo "=============================================================================="
 echo "    Verification: Active Crontab Schedules                                    "

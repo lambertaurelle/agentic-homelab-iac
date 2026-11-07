@@ -70,18 +70,33 @@ pcloud_user = os.getenv('PCLOUD_USERNAME', '')
 pcloud_pass = os.getenv('PCLOUD_PASSWORD', '')
 
 conf_path = '${RCLONE_CONF}'
+
+# Preserve existing token if env var is empty
+existing_tok = ""
+if os.path.exists(conf_path):
+    try:
+        import configparser
+        cp = configparser.ConfigParser()
+        cp.read(conf_path)
+        if cp.has_option(remote_name, 'token'):
+            existing_tok = cp.get(remote_name, 'token')
+    except Exception:
+        pass
+
+tok_to_use = pcloud_token or existing_tok
+
 with open(conf_path, 'w') as f:
     f.write(f'[{remote_name}]\n')
     f.write(f'type = {remote_type}\n')
     if remote_type == 'pcloud':
         host = 'eapi.pcloud.com' if pcloud_region == 'eu' else 'api.pcloud.com'
         f.write(f'hostname = {host}\n')
-        if pcloud_token:
+        if tok_to_use:
             try:
-                compact_token = json.dumps(json.loads(pcloud_token))
-                f.write(f'token = {compact_token}\n')
+                compact_tok = json.dumps(json.loads(tok_to_use))
+                f.write(f'token = {compact_tok}\n')
             except Exception:
-                f.write(f'token = {pcloud_token}\n')
+                f.write(f'token = {tok_to_use}\n')
         elif pcloud_user and pcloud_pass:
             try:
                 obs = subprocess.check_output(['rclone', 'obscure', pcloud_pass]).decode().strip()
