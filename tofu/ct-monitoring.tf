@@ -13,8 +13,8 @@ resource "proxmox_virtual_environment_container" "monitoring" {
 
   # Privileged mode ensures straightforward Docker nested container execution
   unprivileged  = var.monitoring_unprivileged
-  started       = true
-  start_on_boot = true
+  started       = false
+  start_on_boot = false
 
   startup {
     order    = 3
@@ -64,6 +64,7 @@ resource "proxmox_virtual_environment_container" "monitoring" {
   }
 
   lifecycle {
+    prevent_destroy = true
     ignore_changes = [
       mount_point,
       device_passthrough,

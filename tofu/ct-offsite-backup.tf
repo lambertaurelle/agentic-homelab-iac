@@ -75,12 +75,14 @@ resource "proxmox_virtual_environment_container" "offsite_backup" {
 
 
   lifecycle {
+    prevent_destroy = true
     ignore_changes = [
       mount_point,
       device_passthrough,
       features,
       initialization,
       tags,
+      started,
     ]
   }
 }

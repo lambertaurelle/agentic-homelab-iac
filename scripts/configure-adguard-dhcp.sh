@@ -28,7 +28,7 @@ fi
 
 ADGUARD_PRIMARY_IP="${ADGUARD_PRIMARY_IP:-10.0.0.201}"
 ADGUARD_ADMIN_USER="${ADGUARD_ADMIN_USER:-admin}"
-ADGUARD_ADMIN_PASS="${ADGUARD_ADMIN_PASS:-}"
+ADGUARD_ADMIN_PASS="${ADGUARD_ADMIN_PASS:-${ADGUARD_SYNC_PASS:-}}"
 
 TARGET_APP=""
 TARGET_MAC=""
@@ -62,9 +62,9 @@ echo "==========================================================================
 echo "    AdGuard Home Static DHCP Leases Reconciler                                "
 echo "=============================================================================="
 
-# Test if AdGuard is reachable on port 80/3000
-if ! nc -z -w 2 "${ADGUARD_PRIMARY_IP}" 80 2>/dev/null && ! nc -z -w 2 "${ADGUARD_PRIMARY_IP}" 3000 2>/dev/null; then
-    echo "[!] Notice: AdGuard Home Primary (${ADGUARD_PRIMARY_IP}) is not reachable on network."
+# Test if AdGuard is reachable on port 3000
+if ! nc -z -w 2 "${ADGUARD_PRIMARY_IP}" 3000 2>/dev/null; then
+    echo "[!] Notice: AdGuard Home Primary (${ADGUARD_PRIMARY_IP}) is not reachable on network (port 3000)."
     echo "    Skipping DHCP lease injection (run again once AdGuard is online)."
     exit 0
 fi
@@ -75,7 +75,7 @@ if [ -n "${TARGET_APP}" ] && [ -n "${TARGET_MAC}" ] && [ -n "${TARGET_IP}" ]; th
     if [ -n "${ADGUARD_ADMIN_PASS}" ]; then
         curl -fsS -u "${ADGUARD_ADMIN_USER}:${ADGUARD_ADMIN_PASS}" \
              -H "Content-Type: application/json" \
-             -X POST "http://${ADGUARD_PRIMARY_IP}/control/dhcp/add_static_lease" \
+             -X POST "http://${ADGUARD_PRIMARY_IP}:3000/control/dhcp/add_static_lease" \
              -d "{\"mac\":\"${TARGET_MAC}\",\"ip\":\"${TARGET_IP}\",\"hostname\":\"${TARGET_APP}\"}" \
              >/dev/null 2>&1 || echo "[!] Notice: Could not push lease via API (manual configuration in AdGuard UI may be required)."
     fi

@@ -16,6 +16,7 @@ if [ -f "${REPO_ROOT}/homelab-secrets.env" ]; then
 fi
 
 NODE1_IP="${NODE1_IP:-10.0.0.10}"
+NODE2_IP="${NODE2_IP:-10.0.0.20}"
 CTID="${OFFSITE_BACKUP_CT_ID:-602}"
 SCHEDULE_TIME="${OFFSITE_BACKUP_SCHEDULE:-45 3 * * *}"
 
@@ -53,7 +54,7 @@ run_on_master "cat << 'CRONEOF' > /etc/cron.d/homelab-offsite-backup
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
-${SCHEDULE_TIME} root if pct status ${CTID} 2>/dev/null | grep -q 'running'; then pct exec ${CTID} -- systemctl start offsite-backup.service; elif pct status ${CTID} >/dev/null 2>&1; then pct start ${CTID}; fi >/var/log/homelab-offsite-backup.log 2>&1
+${SCHEDULE_TIME} root while pgrep -x vzdump >/dev/null || ssh -o StrictHostKeyChecking=no -o ConnectTimeout=2 \"root@${NODE2_IP}\" \"pgrep -x vzdump >/dev/null\" 2>/dev/null; do sleep 30; done; if pct status ${CTID} 2>/dev/null | grep -q 'running'; then pct exec ${CTID} -- systemctl start offsite-backup.service; elif pct status ${CTID} >/dev/null 2>&1; then pct start ${CTID}; fi >/var/log/homelab-offsite-backup.log 2>&1
 CRONEOF
 chmod 644 /etc/cron.d/homelab-offsite-backup"
 

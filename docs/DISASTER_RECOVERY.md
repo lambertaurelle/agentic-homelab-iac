@@ -300,6 +300,41 @@ pct exec 601 -- bash -c "cd /opt/monitoring && docker compose start uptime-kuma"
 
 ---
 
+## ⚖️ Corosync Quorum Recovery & Two-Node Architecture
+
+In a 2-node Proxmox VE cluster (`node-1` and `node-2`), Corosync is configured with `two_node: 1`.
+
+### 1. Behavior During Cold-Boot or Single-Node Loss
+- Under standard operations with both nodes online, quorum is maintained (`2 of 2 votes`).
+- If one node fails or is powered down, `two_node: 1` allows the surviving node to retain quorum as long as Corosync was already connected prior to the split.
+- **Cold-Boot Single Node Trap**: If a single node is cold-booted alone (e.g. after a total power outage where the peer node does not power up), Corosync does not obtain quorum at boot, resulting in:
+  `cfs-lock error: no quorum!`
+  which prevents `pct start`, `pct restore`, or modifications to `/etc/pve/`.
+
+### 2. Emergency Quorum Recovery (`pvecm expected 1`)
+To immediately unblock a surviving node running alone:
+```bash
+# Temporarily set expected votes to 1 to regain quorum immediately
+pvecm expected 1
+```
+Once executed, the Proxmox Cluster Filesystem (`/etc/pve/`) returns to read-write mode, allowing container starts, restorations, and administration to proceed without delay.
+
+### 3. Optional Arbitrator: External QDevice (`corosync-qnetd`)
+For automated 3rd-vote arbitration without manual intervention during single-node cold-boots:
+- A lightweight QDevice (`corosync-qnetd`) can run as an external tie-breaker on a third device (such as a NAS, Raspberry Pi, or external VPS).
+- Configured via:
+  ```bash
+  # Install on arbitrator host:
+  apt-get install corosync-qnetd
+
+  # Register from Proxmox node:
+  pvecm qdevice setup <arbitrator-ip>
+  ```
+- *Operational Recommendation*: In homelab environments prioritizing simplicity and zero external dependencies, manual recovery via `pvecm expected 1` is preferred over introducing runtime coupling to the NAS.
+
+
+---
+
 ## 🚨 Emergency DNS Bypass & Cluster Outage Recovery
 
 If both hypervisors or both AdGuard Home instances (`10.0.0.201` and `10.0.0.202`) are offline, client devices on the LAN will lose domain name resolution.

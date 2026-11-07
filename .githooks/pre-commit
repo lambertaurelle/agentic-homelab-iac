@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Git Pre-Commit Hook: Subnet Isolation & Doc Synchronization Gate
+# ==============================================================================
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+echo "[*] [pre-commit] Running pre-commit validation gates..."
+
+# Verify bidirectional subnet isolation and documentation synchronization
+"${REPO_ROOT}/scripts/check-subnet-isolation.sh"
+"${REPO_ROOT}/scripts/check-doc-sync.sh" --git-hook
+"${REPO_ROOT}/scripts/check-doc-sync.sh" --audit
+
+echo "[+] [pre-commit] All pre-commit gates passed."
+exit 0

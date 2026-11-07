@@ -83,6 +83,9 @@ if [ -z "${TARGET_APP}" ] && [ "${RECONCILE_ALL}" = false ]; then
     exit 1
 fi
 
+# Pre-flight: verify bidirectional subnet isolation
+"${SCRIPT_DIR}/check-subnet-isolation.sh"
+
 log() {
     local timestamp
     timestamp=$(date '+%Y-%m-%d %H:%M:%S')
@@ -262,6 +265,14 @@ reconcile_single_stack() {
     # 4. Ensure destination directory exists inside container
     run_in_ct "${node_ip}" "${ctid}" "mkdir -p /opt/${app}"
 
+    # 4b. Security check: Verify NFS mount if stack mounts /mnt/syno-data or /mnt/syno-photos
+    if grep -q '/mnt/syno-' "${stack_dir}"/docker-compose*.y*ml 2>/dev/null; then
+        if ! run_in_ct "${node_ip}" "${ctid}" "mountpoint -q /mnt/syno-data || mountpoint -q /mnt/syno-photos"; then
+            log "[!] ATTENTION: Montage NFS absent dans CT ${ctid}. Arrêt préventif du déploiement de ${app} !"
+            return 1
+        fi
+    fi
+
     # 5. Synchronize stack directory into container
     log "[*] Synchronizing declarative configuration to CT ${ctid}:/opt/${app}..."
     tar -C "${stack_dir}" \
@@ -271,10 +282,10 @@ reconcile_single_stack() {
         -cf - . | run_on_node "${node_ip}" "pct exec ${ctid} -- tar -C /opt/${app} -xf -"
 
     # 6. Converge container stack using docker compose up
-    log "[*] Applying declarative Compose state (docker compose up -d --remove-orphans)..."
+    log "[*] Applying declarative Compose state (docker compose up -d --remove-orphans --wait --wait-timeout 120)..."
     run_in_ct "${node_ip}" "${ctid}" "
         cd /opt/${app}
-        docker compose up -d --remove-orphans
+        docker compose up -d --remove-orphans --wait --wait-timeout 120
         docker image prune -f >/dev/null 2>&1 || true
     "
 

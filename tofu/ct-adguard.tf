@@ -76,6 +76,7 @@ resource "proxmox_virtual_environment_container" "adguard_primary" {
   }
 
   lifecycle {
+    prevent_destroy = true
     ignore_changes = [
       mount_point,
       device_passthrough,
@@ -158,6 +159,7 @@ resource "proxmox_virtual_environment_container" "adguard_secondary" {
   }
 
   lifecycle {
+    prevent_destroy = true
     ignore_changes = [
       mount_point,
       device_passthrough,

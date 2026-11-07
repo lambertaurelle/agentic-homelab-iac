@@ -6,9 +6,16 @@ set -euo pipefail
 
 REMOTE_NAME="${1:-}"
 REMOTE_URL="${2:-}"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+# ------------------------------------------------------------------------------
+# 0. Global Pre-Push Gates (Subnet Isolation & Documentation Alignment)
+# ------------------------------------------------------------------------------
+"${REPO_ROOT}/scripts/check-subnet-isolation.sh"
+"${REPO_ROOT}/scripts/check-doc-sync.sh" --audit
 
 # Read push range lines from stdin (<local_ref> <local_sha> <remote_ref> <remote_sha>)
-while read -r local_ref local_sha remote_ref remote_sha; do
+while read -r _local_ref local_sha _remote_ref remote_sha; do
     # Skip branch deletion
     if [ "${local_sha}" = "0000000000000000000000000000000000000000" ]; then
         continue
@@ -35,7 +42,6 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     # --------------------------------------------------------------------------
     GITLEAKS_BIN=$(command -v gitleaks 2>/dev/null || find /root/.cache/pre-commit -type f -name gitleaks -perm -u+x 2>/dev/null | head -n1 || true)
     if [ -n "${GITLEAKS_BIN}" ] && [ -x "${GITLEAKS_BIN}" ]; then
-        REPO_ROOT="$(git rev-parse --show-toplevel)"
         CONFIG_FLAG=()
         if [ -f "${REPO_ROOT}/.gitleaks.toml" ]; then
             CONFIG_FLAG=(--config "${REPO_ROOT}/.gitleaks.toml")
@@ -69,13 +75,16 @@ while read -r local_ref local_sha remote_ref remote_sha; do
             exit 1
         fi
 
-        # Check for private personal keywords in commit diff content (excluding the pre-push hook itself)
-        FORBIDDEN_MATCHES=$(git log -p "${COMMIT_RANGE}" -- . ':!.githooks/pre-push' | grep -Ei '^\+[^+].*(proxmox-tailscale|EvanSecure|lecuchon\.family|@aurelle\.eu)' || true)
-        if [ -n "${FORBIDDEN_MATCHES}" ]; then
-            echo "[-] [pre-push] FATAL: Private instance identifiers detected in upstream diff:" >&2
-            echo "${FORBIDDEN_MATCHES}" | head -n 5 | sed 's/^/    ! /' >&2
-            echo "[-] Zero Upstream Leak Invariant violated. Push aborted." >&2
-            exit 1
+        # Check for private personal keywords from external config file
+        PATTERN_FILE="${REPO_ROOT}/scripts/instance/forbidden-patterns.conf"
+        if [ -f "${PATTERN_FILE}" ]; then
+            FORBIDDEN_MATCHES=$(git log -p "${COMMIT_RANGE}" -- . ':!.githooks/pre-push' | grep -Ei -f "${PATTERN_FILE}" || true)
+            if [ -n "${FORBIDDEN_MATCHES}" ]; then
+                echo "[-] [pre-push] FATAL: Private instance identifiers detected in upstream diff:" >&2
+                echo "${FORBIDDEN_MATCHES}" | head -n 5 | sed 's/^/    ! /' >&2
+                echo "[-] Zero Upstream Leak Invariant violated. Push aborted." >&2
+                exit 1
+            fi
         fi
 
         echo "[+] [pre-push] Zero Upstream Leak Invariants verified successfully."

@@ -115,6 +115,14 @@ During host reboot or recovery, LXC containers start in strict dependency order:
 3. **Order 3 (Delay: 10s)**: Application workloads & monitoring (`CT 601`, app containers).
 4. **Host Default**: Management Workspace (`CT 900`) & Developer Workstation (`CT 901`).
 
+### 4. Morning SRE Proactive Agent & Event-Driven Observability
+- **Engine (`scripts/daily-sre-check.sh`)**: Runs daily at 06:00 AM inside Management Workspace (`mgmt-devops`, CT 900).
+- **Zero-Token Routine Probing**: Executes 9 deterministic local bash probes across the cluster (Quorum status, Disk/RAM utilization, VZDump backup completion at 03:00, Offsite pCloud backup completion at 03:45, systemd upgrade logs, Docker crashloop detection, AdGuard DNS resolution, OpenTofu state drift detection, and code-documentation synchronization).
+- **Green Heartbeat (100% RAS)**: If all probes report healthy, dispatches a rich green Discord embed (`✅ Homelab Morning SRE Check — 100% RAS`) consuming 0 LLM tokens.
+- **Autonomous Incident Remediation Loop**: If any anomaly is detected, automatically triggers `agy --mode plan --model pro` to spawn a dedicated, isolated Antigravity incident conversation with a complete remediation plan and notifies the operator via a red Discord alert containing the incident ID.
+- Replaces legacy Uptime Kuma polling (CT 601) with lightweight, event-driven deterministic observability.
+
+
 ---
 
 ## 🔐 Security Architecture & DevSecOps Governance

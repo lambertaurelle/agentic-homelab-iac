@@ -383,7 +383,7 @@ variable "adguard_primary_ssh_public_keys" {
 variable "adguard_primary_unprivileged" {
   description = "Whether LXC is unprivileged. Recommended false for privileged mode"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "adguard_primary_tags" {
@@ -483,7 +483,7 @@ variable "adguard_secondary_ssh_public_keys" {
 variable "adguard_secondary_unprivileged" {
   description = "Whether LXC is unprivileged. Recommended false for privileged mode"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "adguard_secondary_tags" {

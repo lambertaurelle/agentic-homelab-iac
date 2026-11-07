@@ -60,6 +60,27 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# ------------------------------------------------------------------------------
+# Concurrency Lock (Prevent simultaneous overlapping update runs)
+# ------------------------------------------------------------------------------
+LOCK_FILE="/var/run/homelab-updates.lock"
+exec 200>"${LOCK_FILE}"
+if ! flock -n 200; then
+    echo "[-] NOTICE: Another instance of update-cluster-stack.sh is currently running. Exiting cleanly." >&2
+    exit 0
+fi
+
+DISCORD_WEBHOOK="${DISCORD_MONITORING_WEBHOOK_URL:-${DISCORD_WEBHOOK_URL:-}}"
+TOTAL_ERRORS=0
+FAILED_COMPONENTS=()
+
+report_failure() {
+    local component="$1"
+    local error_msg="$2"
+    TOTAL_ERRORS=$((TOTAL_ERRORS + 1))
+    FAILED_COMPONENTS+=("• **${component}**: ${error_msg}")
+}
+
 # Ensure log file and directory exist
 mkdir -p "$(dirname "${LOG_FILE}")"
 touch "${LOG_FILE}" 2>/dev/null || true
@@ -183,10 +204,11 @@ update_pve_host() {
         log "[DRY-RUN] Node '${node_name}': ${upgradable_list}"
     else
         log "[*] Updating package repositories and upgrading packages on '${node_name}'..."
-        if run_on_node "${node_ip}" "export DEBIAN_FRONTEND=noninteractive && apt-get update -q && apt-get dist-upgrade -y -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\" && apt-get autoremove -y -q && apt-get clean"; then
+        if run_on_node "${node_ip}" "export DEBIAN_FRONTEND=noninteractive && apt-get update -q && apt-get dist-upgrade -y -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\" && apt-get autoremove -y -q --purge && apt-get clean && rm -rf /var/cache/apt/archives/*.deb /var/cache/apt/*.bin 2>/dev/null && journalctl --vacuum-size=100M --vacuum-time=14d >/dev/null 2>&1"; then
             log "[+] Host packages on node '${node_name}' updated successfully."
         else
             log "[-] Error: Package upgrade on '${node_name}' reported a non-zero exit code."
+            report_failure "Host ${node_name}" "Package upgrade reported a non-zero exit code"
         fi
     fi
 }
@@ -224,10 +246,11 @@ update_lxc_container() {
         log "[DRY-RUN] CT ${ct_id} (${ct_name}): ${ct_upgradable}"
     else
         log "[*] Updating CT ${ct_id} (${ct_name} on ${node_name})..."
-        if run_in_ct "${node_ip}" "${ct_id}" "export DEBIAN_FRONTEND=noninteractive && apt-get update -q && apt-get dist-upgrade -y -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\" && apt-get autoremove -y -q && apt-get clean"; then
+        if run_in_ct "${node_ip}" "${ct_id}" "export DEBIAN_FRONTEND=noninteractive && apt-get update -q && apt-get dist-upgrade -y -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\" && apt-get autoremove -y -q --purge && apt-get clean && rm -rf /var/cache/apt/archives/*.deb /var/cache/apt/*.bin 2>/dev/null && journalctl --vacuum-size=100M --vacuum-time=14d >/dev/null 2>&1 && if [ \"${ct_id}\" = \"900\" ]; then rm -rf /root/.cache/go-build/* /root/.cache/pip/* 2>/dev/null || true; fi"; then
             log "[+] CT ${ct_id} (${ct_name}) updated successfully."
         else
             log "[!] Warning: CT ${ct_id} (${ct_name}) OS package update reported non-zero status. Continuing with next container..."
+            report_failure "CT ${ct_id} (${ct_name})" "OS package upgrade returned non-zero status"
         fi
     fi
 }
@@ -240,7 +263,7 @@ if [ "$PROCESS_NODE1" = true ]; then
     mapfile -t ACTIVE_NODE1_CTS < <(get_running_cts "${NODE1_HOST}")
     log "[+] Active containers on node-1: ${ACTIVE_NODE1_CTS[*]:-none}"
     for ct in "${ACTIVE_NODE1_CTS[@]}"; do
-        [ -z "${ct}" ] && continue
+        [ -z "${ct}" ] || [ "${ct}" = "602" ] && continue
         update_lxc_container "node-1" "${NODE1_HOST}" "${ct}"
     done
 fi
@@ -250,7 +273,7 @@ if [ "$PROCESS_NODE2" = true ]; then
     mapfile -t ACTIVE_NODE2_CTS < <(get_running_cts "${NODE2_HOST}")
     log "[+] Active containers on node-2: ${ACTIVE_NODE2_CTS[*]:-none}"
     for ct in "${ACTIVE_NODE2_CTS[@]}"; do
-        [ -z "${ct}" ] && continue
+        [ -z "${ct}" ] || [ "${ct}" = "602" ] && continue
         update_lxc_container "node-2" "${NODE2_HOST}" "${ct}"
     done
 fi
@@ -432,6 +455,14 @@ update_docker_stack() {
             fi
             if [ -d '${stack_dir}' ]; then
                 cd '${stack_dir}'
+                # Minecraft safe chunk flush guard
+                if [ \"${stack_name}\" = \"minecraft\" ] || [ \"${ct_id}\" = \"801\" ]; then
+                    ACTIVE_MC=\$(docker ps --format '{{.Names}}' | grep -E '^mc-[a-zA-Z0-9_-]+$' || true)
+                    for srv in \$ACTIVE_MC; do
+                        echo \"[*] [Minecraft Guard] Flushing chunks for \$srv before stack maintenance...\"
+                        docker exec -i \"\$srv\" rcon-cli save-all flush 2>/dev/null || true
+                    done
+                fi
                 echo '[*] Executing docker compose pull...'
                 docker compose pull
                 echo '[*] Applying updated container definitions...'
@@ -448,6 +479,7 @@ update_docker_stack() {
             log "[+] Docker Compose stack ${stack_name} (CT ${ct_id}) successfully updated."
         else
             log "[!] Warning: Docker Compose stack ${stack_name} (CT ${ct_id}) update encountered non-zero status."
+            report_failure "Docker ${stack_name} (CT ${ct_id})" "Compose pull/up encountered non-zero status"
         fi
     fi
 }
@@ -465,7 +497,7 @@ update_node_docker_stacks() {
 
     log "[*] Dynamically scanning active containers on ${node_name} for Docker Compose stacks in /opt/*..."
     for ct_id in "${cts[@]}"; do
-        [ -z "${ct_id}" ] && continue
+        [ -z "${ct_id}" ] || [ "${ct_id}" = "602" ] && continue
         if ! is_ct_running "${node_ip}" "${ct_id}"; then
             continue
         fi
@@ -507,12 +539,40 @@ if [ "$PROCESS_NODE2" = true ]; then
 fi
 
 # ==============================================================================
-# Completion Summary
+# Completion Summary & Discord Alerting on Failure
 # ==============================================================================
 log_header "UPDATE SUMMARY & STATUS"
 if [ "$DRY_RUN" = true ]; then
-    log "[+] DRY-RUN Simulation completed successfully. All components inspected without error."
+    log "[+] DRY-RUN Simulation completed. All components inspected."
+elif [ "${TOTAL_ERRORS}" -gt 0 ]; then
+    log "[-] Cluster updates completed with ${TOTAL_ERRORS} error(s)."
 else
     log "[+] All scheduled updates for homelab cluster completed successfully."
 fi
 log "=============================================================================="
+
+# Failure Notification Dispatch (Silent on Success)
+if [ "${TOTAL_ERRORS}" -gt 0 ] && [ -n "${DISCORD_WEBHOOK}" ] && [ "${DRY_RUN}" = false ]; then
+    log "[-] Sending Discord notification for ${TOTAL_ERRORS} update error(s)..."
+
+    FAILURE_LIST=$(printf '%s\n' "${FAILED_COMPONENTS[@]}")
+    DISCORD_PAYLOAD=$(python3 -c "
+import json, sys
+data = {
+    'embeds': [{
+        'title': '❌ Homelab Cluster Update Failed',
+        'description': f'Automated update routine on **{sys.argv[1]}** encountered **{sys.argv[2]}** error(s).\nReview \`/var/log/homelab-updates.log\` for full details.',
+        'color': 15158332,
+        'fields': [
+            {'name': 'Failed Components', 'value': sys.argv[3][:1000], 'inline': False}
+        ],
+        'footer': {'text': 'Homelab Maintenance Engine • update-cluster-stack.sh'}
+    }]
+}
+print(json.dumps(data))
+" "${TARGET_NODE}" "${TOTAL_ERRORS}" "${FAILURE_LIST}" 2>/dev/null || true)
+
+    if [ -n "${DISCORD_PAYLOAD}" ]; then
+        curl -s -S -X POST -H "Content-Type: application/json" -H "User-Agent: Homelab-Ops/1.0" -d "${DISCORD_PAYLOAD}" "${DISCORD_WEBHOOK}" >/dev/null 2>&1 || true
+    fi
+fi

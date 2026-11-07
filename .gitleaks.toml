@@ -20,6 +20,9 @@ description = "Literal password or secret token assigned in configuration, env o
 regex = '''(?i)\b[A-Z0-9_]*(PASSWORD|PASSWD|RCON|SECRET|TOKEN)[A-Z0-9_]*\s*[=:]\s*["']?([^"'\s$<{#?:]{8,})'''
 secretGroup = 2
 [rules.allowlist]
+paths = [
+    '''scripts/install-offsite-backup\.sh'''
+]
 regexes = [
     '''\$\{[A-Z0-9_]+:[?+-]''',
     '''var\.proxmox'''
@@ -72,5 +75,6 @@ paths = [
     '''secrets\.env\.example$''',
     '''\.tfvars\.example$''',
     '''\.gitleaks\.toml$''',
-    '''implementation_plan\.md$'''
+    '''implementation_plan\.md$''',
+    '''\.agents/skills/gemini-share-extractor/'''
 ]

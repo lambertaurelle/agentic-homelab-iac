@@ -33,9 +33,49 @@ for arg in "$@"; do
     esac
 done
 
-if [ "${EPHEMERAL_MODE}" = true ]; then
-    trap 'echo "[*] Ephemeral mode: shutting down container..."; poweroff 2>/dev/null || shutdown -h now 2>/dev/null || true' EXIT
-fi
+# ==============================================================================
+# Robust Exit & Cleanup Handler (Guaranteed Failure Alerting)
+# ==============================================================================
+DISCORD_ALERT_SENT=false
+
+cleanup_and_exit() {
+    local exit_code=$?
+    local webhook="${DISCORD_WEBHOOK:-${DISCORD_MONITORING_WEBHOOK_URL:-${DISCORD_WEBHOOK_URL:-}}}"
+
+    # If script exited with error and no final discord alert was sent yet
+    if [ "${exit_code}" -ne 0 ] && [ "${DISCORD_ALERT_SENT}" != "true" ]; then
+        echo "[-] CRITICAL: Backup script aborted unexpectedly with exit code ${exit_code}." >&2
+        if [ -n "${webhook}" ]; then
+            local crash_payload
+            crash_payload=$(python3 -c "
+import json, sys
+data = {
+    'embeds': [{
+        'title': '🚨 Critical Offsite Backup Script Abort',
+        'description': f'CT 602 backup worker crashed unexpectedly with exit code \`{sys.argv[1]}\` before completion.\nVerify container logs via \`journalctl -u offsite-backup.service\` or \`inspect-backup.sh\`.',
+        'color': 15158332,
+        'fields': [
+            {'name': 'Exit Code', 'value': str(sys.argv[1]), 'inline': True},
+            {'name': 'Container', 'value': 'CT 602 (offsite-backup)', 'inline': True}
+        ],
+        'footer': {'text': 'Homelab Cloud Backup Engine • Emergency Trap'}
+    }]
+}
+print(json.dumps(data))
+" "${exit_code}" 2>/dev/null || true)
+            if [ -n "${crash_payload}" ]; then
+                curl -s -S -X POST -H "Content-Type: application/json" -d "${crash_payload}" "${webhook}" >/dev/null 2>&1 || true
+            fi
+        fi
+    fi
+
+    # Handle ephemeral auto-poweroff
+    if [ "${EPHEMERAL_MODE}" = true ]; then
+        echo "[*] Ephemeral mode: shutting down container..."
+        poweroff 2>/dev/null || shutdown -h now 2>/dev/null || true
+    fi
+}
+trap cleanup_and_exit EXIT
 
 # ------------------------------------------------------------------------------
 # 1. Environment & Credentials Resolution
@@ -125,7 +165,7 @@ data = {
 print(json.dumps(data))
 " "${title}" "${description}" "${color}" "${fields_json}" "${START_TIMESTAMP}")
 
-    curl -s -S -X POST -H "Content-Type: application/json" -d "${payload}" "${DISCORD_WEBHOOK}" >/dev/null 2>&1 || true
+    curl -s -S -X POST -H "Content-Type: application/json" -H "User-Agent: Homelab-Ops/1.0" -d "${payload}" "${DISCORD_WEBHOOK}" >/dev/null 2>&1 || true
 }
 
 # ------------------------------------------------------------------------------
@@ -175,9 +215,23 @@ while IFS='|' read -r t_name t_src t_excludes; do
     echo "------------------------------------------------------------------------------"
     echo "[*] Target [${TOTAL_PROCESSED}]: ${t_name} -> ${t_src}"
 
+    # --------------------------------------------------------------------------
+    # Target Path & Mountpoint Validation
+    # --------------------------------------------------------------------------
     if [ ! -e "${t_src}" ]; then
-        echo "[-] Warning: Target path does not exist: ${t_src}. Skipping."
-        TARGETS_SUMMARY="${TARGETS_SUMMARY}\n• ⚠️ **${t_name}**: Path not found (${t_src})"
+        echo "[-] ERROR: Target path does not exist: ${t_src}." >&2
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+        TARGETS_SUMMARY="${TARGETS_SUMMARY}\n• ❌ **${t_name}**: Path not found (${t_src})"
+        TARGETS_ERRORS="${TARGETS_ERRORS}\n**${t_name}**: Source directory \`${t_src}\` does not exist (NFS storage unmounted or offline)."
+        continue
+    fi
+
+    # Check for empty directory (unmounted NFS bind-mount canary)
+    if [ -d "${t_src}" ] && [ -z "$(ls -A "${t_src}" 2>/dev/null)" ]; then
+        echo "[-] ERROR: Target directory is completely empty: ${t_src}." >&2
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+        TARGETS_SUMMARY="${TARGETS_SUMMARY}\n• ❌ **${t_name}**: Directory empty (${t_src})"
+        TARGETS_ERRORS="${TARGETS_ERRORS}\n**${t_name}**: Directory \`${t_src}\` is empty. NFS share likely dropped before backup."
         continue
     fi
 
@@ -336,6 +390,9 @@ elif [ "${QUOTA_COLOR}" = 15158332 ] || [ "${QUOTA_COLOR}" = 15105570 ]; then
 else
     send_discord_embed "3066993" "✅ Offsite Backup Completed Successfully" "All configured targets were verified, encrypted, and streamed to offsite cloud storage as expected." "${FIELDS_JSON}"
 fi
+
+# Mark alert as successfully sent so emergency trap won't duplicate on exit
+DISCORD_ALERT_SENT=true
 
 # ------------------------------------------------------------------------------
 # 8. Ephemeral Shutdown (if requested)
