@@ -159,6 +159,7 @@ WorkingDirectory=/root
 Environment="HOME=/root"
 EnvironmentFile=-/etc/offsite-backup/backup.env
 ExecStart=/usr/local/bin/run-offsite-backup --ephemeral
+TimeoutStartSec=14400
 StandardOutput=journal+console
 StandardError=journal+console
 

@@ -18,15 +18,17 @@ gantt
     NAS VZDump Snapshots (03:00)       :active, 03:00, 30m
     Offsite Cloud Differential (03:45) :active, 03:45, 30m
 
-    section Weekly Rolling Reboots
-    Utility Node node-1 Reboot (Sun 04:00) :crit, 04:00, 15m
-    Compute Node node-2 Reboot (Mon 04:00)  :crit, 04:00, 15m
-
     section Daily Updates
-    Cluster Stack Update Engine (05:00):done, 05:00, 30m
+    node-1 & node-2 Updates (04:30/04:45):done, 04:30, 30m
 
-    section Daily Security Audit
-    DevSecOps Compliance Scan (05:30)  :active, 05:30, 15m
+    section Weekly Rolling Reboots
+    Utility Node node-1 Reboot (Sun 05:15) :crit, 05:15, 15m
+    Compute Node node-2 Reboot (Mon 05:15)  :crit, 05:15, 15m
+
+    section Daily Audits & SRE
+    DevSecOps Compliance Scan (05:45)  :active, 05:45, 15m
+    Morning SRE Check (06:00)          :active, 06:00, 15m
+    Doc-vs-Live Coherence Audit (06:20):active, 06:20, 15m
 
     section Continuous HA Sync
     AdGuard HA Sync (Every 5 min)      :milestone, 00:00, 0m
@@ -34,12 +36,14 @@ gantt
 
 | Schedule | Target / Scope | Script / Tool | Description & Guards | Log Location |
 | :--- | :--- | :--- | :--- | :--- |
-| **Daily 03:00 AM** | All LXC Containers | `/etc/pve/vzdump.cron` | Daily zstd-compressed VZDump snapshot backups to backup storage (`syno-backup` or `local-backup`). Retention: 3 daily, 2 weekly. | `/var/log/vzdump.log` |
-| **Daily 03:45 AM** | VZDump & Stateful Datasets | `scripts/setup-offsite-backup-schedule.sh` | Automated differential offsite cloud backup (pCloud, S3, B2 via Restic/Rclone in CT 602). Prunes retention (3 daily, 2 weekly), audits remote quota, and sends Discord embed alert. | `/var/log/homelab-offsite-backup.log` |
-| **Sunday 04:00 AM** | Utility Node (`node-1`) | `scripts/scheduled-reboot.sh` | Weekly rolling reboot of Utility Node. Requires Compute Node (`node-2`) and Secondary DNS (`10.0.0.202`) to be healthy. | `/var/log/homelab-reboot.log` |
-| **Monday 04:00 AM** | Compute Node (`node-2`) | `scripts/scheduled-reboot.sh` | Weekly rolling reboot of Compute Node. Requires Utility Node (`node-1`) and Primary DNS (`10.0.0.201`) to be healthy. | `/var/log/homelab-reboot.log` |
-| **Daily 05:00 AM** | Both Nodes & Containers | `scripts/update-cluster-stack.sh` | OS dist-upgrade across hypervisors and LXC containers, native app updates (AdGuard, adguardhome-sync, Cloudflared, Antigravity CLI), Docker Compose pull, restart, and image prune. | `/var/log/homelab-updates.log` |
-| **Daily 05:30 AM** | Hypervisors & Management Workspace | `scripts/scan-security.sh` | Daily automated DevSecOps scan (Trivy, Checkov, Gitleaks, ShellCheck, Tofu fmt/validate), Discord security webhook dispatch, and markdown audit reports. | `/var/log/homelab-security-audit.log` |
+| **Daily 03:00 AM** | Active LXC Containers | `/etc/pve/vzdump.cron` | Daily uncompressed (`.tar`, `--compress 0`) VZDump snapshot backups to backup storage (`syno-backup`) for optimal Restic CDC deduplication. Retention: 3 daily, 2 weekly. | `/var/log/vzdump/` |
+| **Daily 03:45 AM** | VZDump & Stateful Datasets | `scripts/setup-offsite-backup-schedule.sh` | Automated differential offsite cloud backup (pCloud, S3, B2 via Restic/Rclone in CT 602). Prunes retention (3 daily, 2 weekly), audits remote quota, and sends unified Discord embed alert. | `CT 602 journald` |
+| **Daily 04:30 / 04:45 AM** | `node-1` (04:30) & `node-2` (04:45) | `scripts/update-cluster-stack.sh` | OS dist-upgrade across hypervisors and LXC containers, native app updates, CT 602 sync, Docker Compose pull/restart/prune. | `/var/log/homelab-updates.log` |
+| **Sunday 05:15 AM** | Utility Node (`node-1`) | `scripts/scheduled-reboot.sh` | Weekly rolling reboot of Utility Node. Requires Compute Node (`node-2`) and Secondary DNS (`10.0.0.202`) to be healthy. | `/var/log/homelab-reboot.log` |
+| **Monday 05:15 AM** | Compute Node (`node-2`) | `scripts/scheduled-reboot.sh` | Weekly rolling reboot of Compute Node. Requires Utility Node (`node-1`) and Primary DNS (`10.0.0.201`) to be healthy. | `/var/log/homelab-reboot.log` |
+| **Daily 05:45 AM** | Hypervisors & Management Workspace | `scripts/scan-security.sh` | Daily automated DevSecOps scan (ShellCheck, Tofu fmt/validate, pre-commit, Checkov), unified Discord notification, and markdown audit reports. | `/var/log/homelab-security-audit.log` |
+| **Daily 06:00 AM** | Management Workspace (CT 900) & Cluster | `scripts/daily-sre-check.sh` | Morning SRE Proactive Health Check (Quorum, Storage/RAM, Backups, Updates, Docker stacks, DNS HA, OpenTofu drift, doc sync). Dispatches Discord green embed or triggers Antigravity incident session. | `/var/log/daily-sre-check.log` |
+| **Daily 06:20 AM** | Docs vs Live Cluster / HAOS / Restic | `scripts/audit-doc-vs-live.sh` | Deterministic read-only drift audit comparing live LXC/VZDump/Restic/HAOS/Restore docs against reality. Spawns interactive Antigravity session + `#monitoring` alert only on divergence. | `/var/log/doc-vs-live-audit.log` |
 | **Every 5 Minutes** | Primary AdGuard (CT 501) | `adguardhome-sync.service` | Bi-directional replication of DNS rules, rewrites, and static DHCP leases from CT 501 to CT 502. | `journalctl -u adguardhome-sync` |
 
 
@@ -66,7 +70,7 @@ The update engine provides end-to-end patching across hypervisors, native LXC pa
    - **AdGuard Home (CT 501 & CT 502)**: Invokes `/opt/AdGuardHome/AdGuardHome --update` and restarts systemd service.
    - **adguardhome-sync (CT 501)**: Queries GitHub API for new release binaries and installs updates automatically.
    - **Cloudflared (CT 510 & CT 511)**: Downloads latest Cloudflare Debian release package, upgrades, and verifies tunnel connectivity.
-   - **Antigravity CLI & Remote Control Daemon (CT 900)**: Upgrades Antigravity CLI binary via `agy update` and restarts the background user service (`agy-remote-control.service`).
+   - **Antigravity CLI & Remote Control Daemon (CT 900)**: Upgrades Antigravity CLI binary via `agy update` and restarts the background user service (`antigravity-cli-daemon.service`).
    - **Instance Workloads Hook**: Executes `scripts/instance/update-instance-workloads.sh` if present to update custom native packages.
 
 4. **Stage 4: Docker Compose Stacks (Pull, Update & Prune)**
@@ -111,7 +115,7 @@ flowchart TD
     Sync --> Reboot["Trigger systemctl reboot"]
 ```
 
-### Pre-Reboot Safety Guards
+### Pre-Reboot Safety Guards & Maintenance Extension Hooks
 
 1. **Guard 1: Peer Node Reachability**:
    - On Utility Node (`node-1`, 10.0.0.10): Pings Compute Node (`node-2`, 10.0.0.20).
@@ -119,9 +123,14 @@ flowchart TD
    - **Action if failed**: Aborts reboot immediately with exit code 2.
 
 2. **Guard 2: Peer DNS Service Health**:
-   - On Utility Node (`node-1`): Executes `dig @10.0.0.202 google.com` against Secondary AdGuard (CT 502 on `node-2`).
-   - On Compute Node (`node-2`): Executes `dig @10.0.0.201 google.com` against Primary AdGuard (CT 501 on `node-1`).
+   - Queries the peer AdGuard resolver (`ADGUARD_SECONDARY_IP` / `ADGUARD_PRIMARY_IP`), validating both `dig` exit status and actual answer records (rejecting `;;` error strings).
    - **Action if failed**: Aborts reboot immediately with exit code 3 to avoid total LAN DNS outage.
+
+3. **Guard 3: Active Operations Protection & Graceful Workload Hooks**:
+   - Verifies no VZDump, CT 602 offsite streaming, or update engine is running.
+   - `update-cluster-stack.sh`, `scheduled-reboot.sh`, `reconcile-stacks.sh`, `vzdump-hook.sh`, and `run-offsite-backup-host.sh` automatically invoke optional instance hooks under `scripts/instance/` (`pre-maintenance-hook.sh`, `post-maintenance-hook.sh`, `pre-stack-update-hook.sh`, `vzdump-hook.sh`, `pre-offsite-backup-hook.sh`, `post-offsite-backup-hook.sh`) so stateful/interactive workloads can notify users, flush saves, and shut down gracefully without data loss.
+   - Containers carrying label `homelab.managed-lifecycle=true` that are intentionally stopped by a watchdog/autostopper are preserved in stopped state during `update-cluster-stack.sh` and `reconcile-stacks.sh`.
+   - `setup-proxmox-nas-backups.sh` configures `/etc/vzdump.conf` (`bwlimit`, `ionice`, and `vzdump-hook.sh`) across cluster nodes, and `run-offsite-backup.sh` supports `OFFSITE_BACKUP_UPLOAD_LIMIT_KB` (`0` = unlimited by default).
 
 ### CLI Usage & Verification
 
@@ -144,8 +153,9 @@ If crontabs ever need to be restored or re-synchronized across nodes:
 ```
 
 This synchronizes all scripts and configurations to `/root/homelab-iac/` on both nodes, sets executable permissions, and installs the crontabs:
-- `node-1` (Utility Node): `0 5 * * * update-cluster-stack.sh`, `30 5 * * * scan-security.sh --discord --report`, & `0 4 * * 0 scheduled-reboot.sh`
-- `node-2` (Compute Node): `0 5 * * * update-cluster-stack.sh` & `0 4 * * 1 scheduled-reboot.sh`
+- `node-1` (Utility Node): `30 4 * * * update-cluster-stack.sh --node node-1`, `15 5 * * 0 scheduled-reboot.sh`, & `45 5 * * * scan-security.sh --discord --report`
+- `node-2` (Compute Node): `45 4 * * * update-cluster-stack.sh --node node-2` & `15 5 * * 1 scheduled-reboot.sh`
+- `CT 900` (`mgmt-devops`): `0 6 * * * daily-sre-check.sh` & `20 6 * * * audit-doc-vs-live.sh`
 
 ---
 

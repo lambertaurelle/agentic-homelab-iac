@@ -124,10 +124,10 @@ else
     echo "[+] All security and quality checks PASSED!"
 fi
 
-WEBHOOK="${DISCORD_SECURITY_WEBHOOK_URL:-${DISCORD_WEBHOOK_URL:-}}"
+WEBHOOK="${DISCORD_SECURITY_WEBHOOK_URL:-${DISCORD_MONITORING_WEBHOOK_URL:-${DISCORD_WEBHOOK_URL:-}}}"
 if [ "${SEND_DISCORD}" = true ] && [ -n "${WEBHOOK}" ]; then
     echo "[*] Dispatching Discord security audit alert..."
-    curl -s -X POST "${WEBHOOK}" \
+    curl -sfS -X POST "${WEBHOOK}" \
         -H "Content-Type: application/json" \
         -d "{
             \"embeds\": [{
@@ -138,6 +138,7 @@ if [ "${SEND_DISCORD}" = true ] && [ -n "${WEBHOOK}" ]; then
                     {\"name\": \"Host\", \"value\": \"$(hostname)\", \"inline\": true},
                     {\"name\": \"Failures\", \"value\": \"${FAILURES}\", \"inline\": true}
                 ],
+                \"footer\": {\"text\": \"Homelab DevSecOps Scanner • #monitoring\"},
                 \"timestamp\": \"$(date -u +'%Y-%m-%dT%H:%M:%SZ')\"
             }]
         }" >/dev/null 2>&1 || echo "[-] Failed to deliver Discord webhook."

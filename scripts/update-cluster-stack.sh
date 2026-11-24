@@ -64,10 +64,13 @@ done
 # Concurrency Lock (Prevent simultaneous overlapping update runs)
 # ------------------------------------------------------------------------------
 LOCK_FILE="/var/run/homelab-updates.lock"
-exec 200>"${LOCK_FILE}"
-if ! flock -n 200; then
-    echo "[-] NOTICE: Another instance of update-cluster-stack.sh is currently running. Exiting cleanly." >&2
-    exit 0
+if [ "${HOMELAB_UPDATES_LOCK_HELD:-false}" != "true" ]; then
+    exec 200>"${LOCK_FILE}"
+    if ! flock -n 200; then
+        echo "[-] NOTICE: Another instance of update-cluster-stack.sh is currently running. Exiting cleanly." >&2
+        exit 0
+    fi
+    export HOMELAB_UPDATES_LOCK_HELD=true
 fi
 
 DISCORD_WEBHOOK="${DISCORD_MONITORING_WEBHOOK_URL:-${DISCORD_WEBHOOK_URL:-}}"
@@ -85,13 +88,21 @@ report_failure() {
 mkdir -p "$(dirname "${LOG_FILE}")"
 touch "${LOG_FILE}" 2>/dev/null || true
 
+# Detect if stdout already points to LOG_FILE (e.g. cron >> /var/log/homelab-updates.log)
+STDOUT_IS_LOG=false
+if [ -e /proc/self/fd/1 ] && [ -e "${LOG_FILE}" ]; then
+    if [ "$(stat -Lc '%d:%i' /proc/self/fd/1 2>/dev/null || echo a)" = "$(stat -Lc '%d:%i' "${LOG_FILE}" 2>/dev/null || echo b)" ]; then
+        STDOUT_IS_LOG=true
+    fi
+fi
+
 # Logging helper
 log() {
     local timestamp
     timestamp=$(date '+%Y-%m-%d %H:%M:%S')
     local message="[$timestamp] $1"
     echo -e "$message"
-    if [ -w "${LOG_FILE}" ]; then
+    if [ "${STDOUT_IS_LOG}" != "true" ] && [ -w "${LOG_FILE}" ]; then
         echo -e "$message" >> "${LOG_FILE}"
     fi
 }
@@ -180,6 +191,17 @@ case "$TARGET_NODE" in
         PROCESS_NODE2=true
         ;;
 esac
+
+# ------------------------------------------------------------------------------
+# 0. Pre-Maintenance Instance Hook (Graceful Workload Warnings & Drain)
+# ------------------------------------------------------------------------------
+PRE_MAINT_HOOK="${REPO_ROOT}/scripts/instance/pre-maintenance-hook.sh"
+if [ "${DRY_RUN}" = false ] && [ -x "${PRE_MAINT_HOOK}" ]; then
+    log "[*] Invoking instance pre-maintenance hook (${PRE_MAINT_HOOK})..."
+    if ! bash "${PRE_MAINT_HOOK}" --mode update --node "${TARGET_NODE}"; then
+        log "[!] Warning: pre-maintenance hook returned non-zero status. Continuing cautiously."
+    fi
+fi
 
 # ==============================================================================
 # 1. Update Proxmox VE Hosts (Hypervisors)
@@ -395,9 +417,9 @@ if [ "$PROCESS_NODE1" = true ] && is_ct_running "${NODE1_HOST}" "900"; then
             if command -v agy >/dev/null 2>&1; then
                 agy update || true
             fi
-            if systemctl --user is-active --quiet agy-remote-control.service 2>/dev/null; then
-                systemctl --user restart agy-remote-control.service
-                echo '[+] Restarted agy-remote-control.service'
+            if systemctl --user is-active --quiet antigravity-cli-daemon.service 2>/dev/null; then
+                systemctl --user restart antigravity-cli-daemon.service
+                echo '[+] Restarted antigravity-cli-daemon.service'
             fi
         "
         new_agy_ver=$(run_in_ct "${NODE1_HOST}" "900" "PATH=\"/root/.local/bin:\$PATH\" agy --version 2>&1 || echo 'unknown'")
@@ -405,7 +427,60 @@ if [ "$PROCESS_NODE1" = true ] && is_ct_running "${NODE1_HOST}" "900"; then
     fi
 fi
 
-# 3e. Execute Instance Workload Hook (if present)
+# 3e. Offsite Backup Worker Script, Targets Config & Service Sync (CT 602 on node-1)
+if [ "$PROCESS_NODE1" = true ]; then
+    log "[*] Synchronizing Offsite Cloud Backup Runner & Targets for CT 602..."
+    if [ "$DRY_RUN" = true ]; then
+        log "[DRY-RUN] Would synchronize run-offsite-backup.sh and backup-targets.yaml to node-1:/var/lib/homelab-offsite-sync"
+    else
+        if run_on_node "${NODE1_HOST}" "pct status 602 >/dev/null 2>&1"; then
+            run_on_node "${NODE1_HOST}" "mkdir -p /var/lib/homelab-offsite-sync && chmod 755 /var/lib/homelab-offsite-sync"
+            if [ -f "${REPO_ROOT}/scripts/run-offsite-backup.sh" ]; then
+                if ip addr show 2>/dev/null | grep -q "${NODE1_HOST}" || [[ "${NODE1_HOST}" == "localhost" ]] || [[ "${NODE1_HOST}" == "127.0.0.1" ]]; then
+                    install -m 755 "${REPO_ROOT}/scripts/run-offsite-backup.sh" /var/lib/homelab-offsite-sync/run-offsite-backup
+                else
+                    ssh -o StrictHostKeyChecking=no -o BatchMode=yes "root@${NODE1_HOST}" \
+                        "cat > /var/lib/homelab-offsite-sync/run-offsite-backup.tmp && chmod 755 /var/lib/homelab-offsite-sync/run-offsite-backup.tmp && mv -f /var/lib/homelab-offsite-sync/run-offsite-backup.tmp /var/lib/homelab-offsite-sync/run-offsite-backup" < "${REPO_ROOT}/scripts/run-offsite-backup.sh"
+                fi
+                log "[+] Offsite Backup runner synchronized to node-1 staging (/var/lib/homelab-offsite-sync)."
+            fi
+            TARGETS_SYNC_SRC=""
+            if [ -f "${REPO_ROOT}/config/instance/backup-targets.yaml" ]; then
+                TARGETS_SYNC_SRC="${REPO_ROOT}/config/instance/backup-targets.yaml"
+            elif [ -f "${REPO_ROOT}/config/backup-targets.example.yaml" ]; then
+                TARGETS_SYNC_SRC="${REPO_ROOT}/config/backup-targets.example.yaml"
+            fi
+            if [ -n "${TARGETS_SYNC_SRC}" ]; then
+                if ip addr show 2>/dev/null | grep -q "${NODE1_HOST}" || [[ "${NODE1_HOST}" == "localhost" ]] || [[ "${NODE1_HOST}" == "127.0.0.1" ]]; then
+                    install -m 644 "${TARGETS_SYNC_SRC}" /var/lib/homelab-offsite-sync/backup-targets.yaml
+                else
+                    ssh -o StrictHostKeyChecking=no -o BatchMode=yes "root@${NODE1_HOST}" \
+                        "cat > /var/lib/homelab-offsite-sync/backup-targets.yaml.tmp && chmod 644 /var/lib/homelab-offsite-sync/backup-targets.yaml.tmp && mv -f /var/lib/homelab-offsite-sync/backup-targets.yaml.tmp /var/lib/homelab-offsite-sync/backup-targets.yaml" < "${TARGETS_SYNC_SRC}"
+                fi
+                log "[+] Offsite Backup targets YAML synchronized to node-1 staging."
+            fi
+            # Only perform live pct push/pull if CT 602 happens to be running
+            run_on_node "${NODE1_HOST}" "
+                if pct status 602 2>/dev/null | grep -q 'running'; then
+                    pct push 602 /var/lib/homelab-offsite-sync/run-offsite-backup /usr/local/bin/run-offsite-backup --perms 755 2>/dev/null || true
+                    [ -f /var/lib/homelab-offsite-sync/backup-targets.yaml ] && pct push 602 /var/lib/homelab-offsite-sync/backup-targets.yaml /etc/offsite-backup/backup-targets.yaml --perms 644 2>/dev/null || true
+                    if pct pull 602 /etc/systemd/system/offsite-backup.service /tmp/offsite-backup.service 2>/dev/null; then
+                        if ! grep -q TimeoutStartSec /tmp/offsite-backup.service; then
+                            sed -i '/ExecStart=/a TimeoutStartSec=14400' /tmp/offsite-backup.service
+                            pct push 602 /tmp/offsite-backup.service /etc/systemd/system/offsite-backup.service --perms 644
+                            pct exec 602 -- systemctl daemon-reload 2>/dev/null || true
+                        fi
+                        rm -f /tmp/offsite-backup.service
+                    fi
+                fi
+            " 2>/dev/null || true
+        else
+            log "[!] CT 602 not found on node-1, skipping script sync."
+        fi
+    fi
+fi
+
+# 3f. Execute Instance Workload Hook (if present)
 INSTANCE_UPDATE_HOOK="${REPO_ROOT}/scripts/instance/update-instance-workloads.sh"
 if [ -f "${INSTANCE_UPDATE_HOOK}" ]; then
     log "[*] Found instance workload update hook at ${INSTANCE_UPDATE_HOOK}. Executing..."
@@ -447,6 +522,19 @@ update_docker_stack() {
             fi
         "
     else
+        # Invoke optional instance pre-stack-update hook (exit 42 = intentionally deferred)
+        PRE_STACK_HOOK="${REPO_ROOT}/scripts/instance/pre-stack-update-hook.sh"
+        if [ -x "${PRE_STACK_HOOK}" ]; then
+            HOOK_RC=0
+            bash "${PRE_STACK_HOOK}" "${node_name}" "${node_ip}" "${ct_id}" "${stack_name}" "${stack_dir}" "${DRY_RUN}" || HOOK_RC=$?
+            if [ "${HOOK_RC}" -eq 42 ]; then
+                log "[*] Instance hook deferred update for ${stack_name} (CT ${ct_id}). Skipping cleanly."
+                return 0
+            elif [ "${HOOK_RC}" -ne 0 ]; then
+                log "[!] Warning: pre-stack-update hook exited with ${HOOK_RC} for ${stack_name}."
+            fi
+        fi
+
         log "[*] Pulling latest images, rebuilding stack and pruning unused images for ${stack_name}..."
         if run_in_ct "${node_ip}" "${ct_id}" "
             if ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>&1; then
@@ -455,18 +543,25 @@ update_docker_stack() {
             fi
             if [ -d '${stack_dir}' ]; then
                 cd '${stack_dir}'
-                # Minecraft safe chunk flush guard
-                if [ \"${stack_name}\" = \"minecraft\" ] || [ \"${ct_id}\" = \"801\" ]; then
-                    ACTIVE_MC=\$(docker ps --format '{{.Names}}' | grep -E '^mc-[a-zA-Z0-9_-]+$' || true)
-                    for srv in \$ACTIVE_MC; do
-                        echo \"[*] [Minecraft Guard] Flushing chunks for \$srv before stack maintenance...\"
-                        docker exec -i \"\$srv\" rcon-cli save-all flush 2>/dev/null || true
-                    done
-                fi
                 echo '[*] Executing docker compose pull...'
                 docker compose pull
                 echo '[*] Applying updated container definitions...'
-                docker compose up -d --remove-orphans
+                STOPPED_MANAGED=\$(docker inspect --format '{{if and (ne .State.Status \"running\") (or (eq .HostConfig.RestartPolicy.Name \"no\") (eq (index .Config.Labels \"homelab.managed-lifecycle\") \"true\"))}}{{index .Config.Labels \"com.docker.compose.service\"}}{{end}}' \$(docker compose ps -a -q) 2>/dev/null | grep . || true)
+                SERVICES_TO_START=\"\"
+                for srv in \$(docker compose config --services 2>/dev/null || true); do
+                    if echo \"\${STOPPED_MANAGED}\" | grep -qw \"\${srv}\"; then
+                        continue
+                    fi
+                    SERVICES_TO_START=\"\${SERVICES_TO_START} \${srv}\"
+                done
+                SERVICES_TO_START=\$(echo \"\${SERVICES_TO_START}\" | xargs)
+                if [ -n \"\${SERVICES_TO_START}\" ]; then
+                    docker compose up -d --remove-orphans \${SERVICES_TO_START}
+                else
+                    docker compose up -d --remove-orphans
+                fi
+                # Refresh dependency links (e.g. network_mode: service:gluetun) for stopped scale-to-zero containers without starting them
+                docker compose up --no-start 2>/dev/null || true
                 echo '[*] Pruning unused legacy Docker images...'
                 docker image prune -f
                 echo '[+] Docker stack ${stack_name} is running latest images:'
@@ -536,6 +631,17 @@ if [ "$PROCESS_NODE2" = true ]; then
         mapfile -t ACTIVE_NODE2_CTS < <(get_running_cts "${NODE2_HOST}")
     fi
     update_node_docker_stacks "node-2" "${NODE2_HOST}" "${ACTIVE_NODE2_CTS[@]}"
+fi
+
+# ==============================================================================
+# Post-Maintenance Instance Hook (Restore / Notify Availability)
+# ==============================================================================
+POST_MAINT_HOOK="${REPO_ROOT}/scripts/instance/post-maintenance-hook.sh"
+if [ "${DRY_RUN}" = false ] && [ -x "${POST_MAINT_HOOK}" ]; then
+    log "[*] Invoking instance post-maintenance hook (${POST_MAINT_HOOK})..."
+    if ! bash "${POST_MAINT_HOOK}" --mode update --node "${TARGET_NODE}" --errors "${TOTAL_ERRORS}"; then
+        log "[!] Warning: post-maintenance hook returned non-zero status."
+    fi
 fi
 
 # ==============================================================================

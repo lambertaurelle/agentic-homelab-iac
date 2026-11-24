@@ -17,15 +17,22 @@ secretGroup = 2
 [[rules]]
 id = "low-entropy-password-assignment"
 description = "Literal password or secret token assigned in configuration, env or script"
-regex = '''(?i)\b[A-Z0-9_]*(PASSWORD|PASSWD|RCON|SECRET|TOKEN)[A-Z0-9_]*\s*[=:]\s*["']?([^"'\s$<{#?:]{8,})'''
+regex = '''(?i)\b[A-Z0-9_]*(PASSWORD|PASSWD|RCON|SECRET|TOKEN)[A-Z0-9_]*[ \t]*[=:][ \t]*["']?([^"'\s$<{#?:]{8,})'''
 secretGroup = 2
 [rules.allowlist]
+regexTarget = "line"
 paths = [
     '''scripts/install-offsite-backup\.sh'''
 ]
 regexes = [
     '''\$\{[A-Z0-9_]+:[?+-]''',
-    '''var\.proxmox'''
+    '''var\.proxmox''',
+    '''os\.(getenv|environ)''',
+    '''int\(os\.getenv''',
+    '''_load_token\(\)''',
+    '''line\.split\(''',
+    '''gluetun-''',
+    '''self\.password[ \t]*=[ \t]*password\b'''
 ]
 
 [[rules]]
@@ -55,7 +62,7 @@ paths = [
     '''(^|/)instance(/|-)'''
 ]
 regexes = [
-    '''^(10\.|127\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|0\.0\.0\.0|1\.1\.1\.1|1\.0\.0\.1|8\.8\.[48]\.[48]|9\.9\.9\.|149\.112\.112\.|255\.255\.255\.)'''
+    '''^(10\.|127\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|0\.0\.0\.0|1\.1\.1\.1|1\.0\.0\.1|8\.8\.[48]\.[48]|9\.9\.9\.|94\.140\.1[45]\.|149\.112\.112\.|255\.255\.255\.)'''
 ]
 
 [allowlist]

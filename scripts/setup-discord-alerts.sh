@@ -48,10 +48,9 @@ run_on_master() {
 }
 
 echo "[*] Configuring Proxmox VE Webhook Endpoint 'discord-alerts'..."
-# Discord JSON body template in Base64
-# {"content": "🚨 **[Proxmox VE Alert - {{ severity }}]** {{ title }}\n```\n{{ message }}\n```"}
+# Discord JSON embed payload using Proxmox Handlebars {{ escape ... }} and bounded fields (avoids Discord 2000/4096 char HTTP 400 on long vzdump reports)
 # shellcheck disable=SC2016
-DISCORD_BODY_JSON='{"content":"🚨 **[Proxmox Alert - {{ severity }}] {{ title }}**\n```\n{{ message }}\n```"}'
+DISCORD_BODY_JSON='{"embeds":[{"title":"🚨 Proxmox VE [{{ escape severity }}] — {{ escape title }}","description":"**Type :** `{{#if fields.type}}{{ escape fields.type }}{{else}}notification{{/if}}` • **Nœud :** `{{#if fields.hostname}}{{ escape fields.hostname }}{{else}}cluster{{/if}}`\nConsultez les journaux `/var/log/vzdump/` ou la Task History Proxmox pour le détail complet.","color":15105570,"footer":{"text":"Proxmox VE Notification Engine • #monitoring"}}]}'
 DISCORD_BODY_B64=$(echo -n "${DISCORD_BODY_JSON}" | base64 -w 0)
 HEADER_JSON_B64=$(echo -n "application/json" | base64 -w 0)
 
@@ -63,7 +62,7 @@ run_on_master "
             --method 'post' \
             --header 'name=Content-Type,value=${HEADER_JSON_B64}' \
             --body '${DISCORD_BODY_B64}' \
-            --comment 'Discord Webhook for Homelab Alerts'
+            --comment 'Discord Webhook for Unified #monitoring Alerts'
     else
         pvesh create /cluster/notifications/endpoints/webhook \
             --name 'discord-alerts' \
@@ -71,12 +70,11 @@ run_on_master "
             --method 'post' \
             --header 'name=Content-Type,value=${HEADER_JSON_B64}' \
             --body '${DISCORD_BODY_B64}' \
-            --comment 'Discord Webhook for Homelab Alerts'
+            --comment 'Discord Webhook for Unified #monitoring Alerts'
     fi
 
-    # Update default-matcher to include discord-alerts target
+    # Update default-matcher to route notifications to discord-alerts (mail-to-root disabled cleanly)
     pvesh set /cluster/notifications/matchers/default-matcher \
-        --target mail-to-root \
         --target discord-alerts \
         --mode 'all'
 "

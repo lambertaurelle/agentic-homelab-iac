@@ -495,7 +495,7 @@ variable "adguard_secondary_tags" {
 variable "adguard_dns_servers" {
   description = "DNS servers to configure for AdGuard Home LXC containers"
   type        = list(string)
-  default     = ["10.0.0.101"]
+  default     = ["1.1.1.1", "8.8.8.8"]
 }
 
 # ==============================================================================

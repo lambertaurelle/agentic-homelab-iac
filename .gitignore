@@ -65,6 +65,8 @@ override.tf.json
 .DS_Store
 *.swp
 *.tmp
+morning_sre_plan.md
+doc_drift_plan.md
 
 # ==============================================================================
 # Python Cache & Bytecode

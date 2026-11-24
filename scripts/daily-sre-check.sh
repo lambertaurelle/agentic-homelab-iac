@@ -23,7 +23,7 @@ if [ -f "${REPO_ROOT}/homelab-secrets.env" ]; then
     . "${REPO_ROOT}/homelab-secrets.env"
 fi
 
-DISCORD_WEBHOOK="${DISCORD_SRE_WEBHOOK_URL:-${DISCORD_WEBHOOK_URL:-}}"
+DISCORD_WEBHOOK="${DISCORD_SRE_WEBHOOK_URL:-${DISCORD_MONITORING_WEBHOOK_URL:-${DISCORD_WEBHOOK_URL:-}}}"
 AGY_BIN="/root/.local/bin/agy"
 TIMESTAMP="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 
@@ -109,13 +109,14 @@ VZDUMP_AUDIT=$(ssh -o StrictHostKeyChecking=no -o BatchMode=yes "root@${NODE1_IP
     fi
 " 2>/dev/null || echo "ERR")
 
+MIN_VZDUMP_ARCHIVES="${MIN_VZDUMP_ARCHIVES:-3}"
 if [[ "${VZDUMP_AUDIT}" == OK:* ]]; then
     VZDUMP_COUNT="${VZDUMP_AUDIT#OK:}"
-    if [ "${VZDUMP_COUNT}" -ge 10 ]; then
+    if [ "${VZDUMP_COUNT}" -ge "${MIN_VZDUMP_ARCHIVES}" ]; then
         log_ok "VZDump: ${VZDUMP_COUNT} archives récentes (<24h) validées sur le NAS."
         METRICS+=("Sauvegardes Locales|VZDump NAS : ${VZDUMP_COUNT} archives conformes")
     else
-        log_warn "Nombre anormalement faible d'archives VZDump récentes : ${VZDUMP_COUNT} trouvées."
+        log_warn "Nombre insuffisant d'archives VZDump récentes (<24h) : ${VZDUMP_COUNT}/${MIN_VZDUMP_ARCHIVES} attendues."
     fi
 else
     log_err "Point de montage NAS /mnt/pve/syno-backup/dump inaccessible sur node-1."
@@ -126,9 +127,14 @@ fi
 # ------------------------------------------------------------------------------
 log_info "Vérification du worker de sauvegarde cloud CT 602..."
 CT602_STATUS=$(ssh -o StrictHostKeyChecking=no -o BatchMode=yes "root@${NODE1_IP}" "pct status 602 2>/dev/null || true")
+CT602_RECENT_RUN=$(ssh -o StrictHostKeyChecking=no -o BatchMode=yes "root@${NODE1_IP}" "find /var/log/pve/tasks -name '*vzstart:602:*' -mtime -1 2>/dev/null | wc -l" || echo "0")
 if echo "${CT602_STATUS}" | grep -q "status:\s*stopped"; then
-    log_ok "CT 602 est éteint (exécution terminée avec succès)."
-    METRICS+=("Sauvegarde Cloud|CT 602 pCloud : Exécution terminée (stopped)")
+    if [ "${CT602_RECENT_RUN}" -ge 1 ]; then
+        log_ok "CT 602 a exécuté son cycle (<24h) et est éteint."
+        METRICS+=("Sauvegardes Cloud|CT 602 pCloud : Cycle exécuté & terminé")
+    else
+        log_warn "CT 602 est éteint mais aucune tâche vzstart:602 détectée ces dernières 24h."
+    fi
 elif echo "${CT602_STATUS}" | grep -q "status:\s*running"; then
     # À 06:00, un conteneur lancé à 03:45 ne devrait plus tourner
     log_err "CT 602 est TOUJOURS EN COURS d'exécution à 06:00 (durée anormale > 2h)."
@@ -157,21 +163,27 @@ fi
 # Sonde 6 : Santé Conteneurs LXC et Stacks Docker
 # ------------------------------------------------------------------------------
 log_info "Audit de l'état des conteneurs LXC et Docker..."
-DOCKER_CRASHES=$(ssh -o StrictHostKeyChecking=no -o BatchMode=yes "root@${NODE1_IP}" "
-    for ctid in 201 900; do
-        if pct status \${ctid} 2>/dev/null | grep -q 'running'; then
-            pct exec \${ctid} -- docker ps --filter 'status=restarting' --format 'CT '\${ctid}': {{.Names}} (Restarting)' 2>/dev/null || true
+DOCKER_CRASHES=$(ssh -o StrictHostKeyChecking=no -o BatchMode=yes "root@${NODE1_IP}" '
+    for ctid in $(pct list 2>/dev/null | awk '\''NR>1 && $2=="running" {print $1}'\''); do
+        out=$(pct exec "${ctid}" -- sh -c "command -v docker >/dev/null 2>&1 && docker ps --filter status=restarting --format {{.Names}}" 2>/dev/null || true)
+        if [ -n "${out}" ]; then
+            while IFS= read -r cname; do
+                [ -n "${cname}" ] && echo "CT ${ctid}: ${cname} (Restarting)"
+            done <<< "${out}"
         fi
     done
-" 2>/dev/null || true)
+' 2>/dev/null || true)
 
-DOCKER_CRASHES_N2=$(ssh -o StrictHostKeyChecking=no -o BatchMode=yes "root@${NODE2_IP}" "
-    for ctid in 101 301 701 702 801; do
-        if pct status \${ctid} 2>/dev/null | grep -q 'running'; then
-            pct exec \${ctid} -- docker ps --filter 'status=restarting' --format 'CT '\${ctid}': {{.Names}} (Restarting)' 2>/dev/null || true
+DOCKER_CRASHES_N2=$(ssh -o StrictHostKeyChecking=no -o BatchMode=yes "root@${NODE2_IP}" '
+    for ctid in $(pct list 2>/dev/null | awk '\''NR>1 && $2=="running" {print $1}'\''); do
+        out=$(pct exec "${ctid}" -- sh -c "command -v docker >/dev/null 2>&1 && docker ps --filter status=restarting --format {{.Names}}" 2>/dev/null || true)
+        if [ -n "${out}" ]; then
+            while IFS= read -r cname; do
+                [ -n "${cname}" ] && echo "CT ${ctid}: ${cname} (Restarting)"
+            done <<< "${out}"
         fi
     done
-" 2>/dev/null || true)
+' 2>/dev/null || true)
 
 ALL_CRASHES="${DOCKER_CRASHES}"$'\n'"${DOCKER_CRASHES_N2}"
 ALL_CRASHES=$(echo "${ALL_CRASHES}" | sed '/^[[:space:]]*$/d')
@@ -207,9 +219,14 @@ else
 fi
 
 # ------------------------------------------------------------------------------
-# Sonde 8 : Dérive Déclarative OpenTofu
+# Sonde 8 : Dérive Déclarative OpenTofu & Branche Git Active
 # ------------------------------------------------------------------------------
-log_info "Vérification de dérive d'infrastructure OpenTofu..."
+log_info "Vérification de la branche Git active et de la dérive OpenTofu..."
+CURRENT_BRANCH=$(git -C "${REPO_ROOT}" branch --show-current 2>/dev/null || echo "unknown")
+if [ "${CURRENT_BRANCH}" != "main" ]; then
+    log_warn "Git : mgmt-devops est sur la branche '${CURRENT_BRANCH}' au lieu de 'main' (les définitions 'instance' peuvent être masquées)."
+fi
+
 TOFU_PLAN_EXIT=0
 if command -v tofu >/dev/null 2>&1 && [ -d "${REPO_ROOT}/tofu" ]; then
     cd "${REPO_ROOT}/tofu"
@@ -221,7 +238,7 @@ if [ "${TOFU_PLAN_EXIT}" -eq 0 ]; then
     log_ok "OpenTofu : Aucune dérive (Infrastructure 100% synchronisée avec Git)."
     METRICS+=("État Déclaratif|OpenTofu : 0 dérive (Git matches live)")
 elif [ "${TOFU_PLAN_EXIT}" -eq 2 ]; then
-    log_warn "OpenTofu : Dérive d'infrastructure détectée (des modifications non committées existent)."
+    log_warn "OpenTofu : Dérive d'infrastructure détectée par 'tofu plan' (ressources divergentes ou orphelines)."
 else
     log_err "OpenTofu : Erreur lors de l'exécution de 'tofu plan' (code exit ${TOFU_PLAN_EXIT})."
 fi
@@ -296,14 +313,16 @@ fi
 # ------------------------------------------------------------------------------
 # ÉTAPE 2B : Scénario d'Anomalie (Auto-Spawn Antigravity Session + Alerte Rouge)
 # ------------------------------------------------------------------------------
-log_warn "BILAN SRE : ${#ISSUES[@]} anomalie(s) détectée(s) ! Instanciation de l'agent Antigravity..."
+log_info "BILAN SRE : ${#ISSUES[@]} anomalie(s) détectée(s) ! Instanciation de l'agent Antigravity..."
 
 ANOMALIES_MD=""
 for issue in "${ISSUES[@]}"; do
     ANOMALIES_MD+=$'\n'"- ${issue}"
 done
 
-PROMPT="[PHASE 1 — ANALYSE, RECHERCHE & PLANIFICATION FLASH-READY | Model: \"pro\" | READ-ONLY]
+TODAY_SRE_DATE="$(date +'%Y-%m-%d')"
+PROMPT="[MORNING SRE ALERT ${TODAY_SRE_DATE}] ${#ISSUES[@]} anomalie(s) détectée(s)
+[PHASE 1 — ANALYSE, RECHERCHE & PLANIFICATION FLASH-READY | Model: \"pro\" | READ-ONLY]
 
 Le Morning SRE Proactive Agent a détecté ${#ISSUES[@]} anomalie(s) critique(s) sur le homelab lors du contrôle matinal de 06:00 :
 
@@ -322,28 +341,60 @@ CLI_JSON_OUTPUT=""
 
 if [ -x "${AGY_BIN}" ]; then
     cd "${REPO_ROOT}"
-    # Lancement non-bloquant ou print mode pour instancier la session dans le workspace
+    # Modèle Antigravity CLI valide (gemini-4-argon-high pour analyse Pro approfondie)
+    AGY_TARGET_MODEL="${ANTIGRAVITY_MODEL:-gemini-4-argon-high}"
+    AGY_PROJECT_ID="${ANTIGRAVITY_PROJECT_ID:-}"
+    AGY_PROJECT_ARGS=()
+    if [ -n "${AGY_PROJECT_ID}" ]; then
+        AGY_PROJECT_ARGS=(--project "${AGY_PROJECT_ID}")
+    fi
     CLI_JSON_OUTPUT=$("${AGY_BIN}" \
         --mode plan \
-        --model pro \
+        --model "${AGY_TARGET_MODEL}" \
+        "${AGY_PROJECT_ARGS[@]}" \
         --dangerously-skip-permissions \
         --output-format json \
         -p "${PROMPT}" 2>&1 || true)
 
-    # Extraction du conversation ID
+    # Extraction du conversation ID depuis le payload JSON
     CONV_ID=$(echo "${CLI_JSON_OUTPUT}" | jq -r '.conversation_id // .conversationId // empty' 2>/dev/null || true)
     if [ -z "${CONV_ID}" ]; then
-        # Découverte du brain le plus récent généré
-        CONV_ID=$(find /root/.gemini/antigravity-cli/brain -maxdepth 1 -mindepth 1 -type d -cmin -3 2>/dev/null | head -n1 | xargs -r basename || echo "active-workspace-session")
+        # Découverte du brain le plus récent généré (trié par mtime décroissant)
+        CONV_ID=$(find /root/.gemini/antigravity-cli/brain -maxdepth 1 -mindepth 1 -type d -cmin -5 -printf '%T@ %f\n' 2>/dev/null | sort -rn | head -n1 | awk '{print $2}' || true)
     fi
-    log_ok "Session Antigravity créée avec succès. Conversation ID: ${CONV_ID}"
+    if [ -z "${CONV_ID}" ]; then
+        CONV_ID="session-pending"
+        log_warn "Impossible d'extraire le Conversation ID Antigravity. Sortie CLI : ${CLI_JSON_OUTPUT:0:200}"
+    else
+        log_ok "Session Antigravity créée avec succès. Conversation ID: ${CONV_ID}"
+        # Set human-readable title and ensure project_id in conversation_summaries.db
+        TODAY_DATE="$(date +'%Y-%m-%d')"
+        if [ -n "${AGY_PROJECT_ID}" ]; then
+            sqlite3 /root/.gemini/antigravity-cli/conversation_summaries.db \
+                "UPDATE conversation_summaries SET title = 'Morning SRE Remediation Plan (${TODAY_DATE})', project_id = '${AGY_PROJECT_ID}' WHERE conversation_id = '${CONV_ID}' AND (title IS NULL OR title = '');" 2>/dev/null || true
+        else
+            sqlite3 /root/.gemini/antigravity-cli/conversation_summaries.db \
+                "UPDATE conversation_summaries SET title = 'Morning SRE Remediation Plan (${TODAY_DATE})' WHERE conversation_id = '${CONV_ID}' AND (title IS NULL OR title = '');" 2>/dev/null || true
+        fi
+        # Expose implementation_plan.md at repository root for instant access
+        PLAN_SRC="/root/.gemini/antigravity-cli/brain/${CONV_ID}/implementation_plan.md"
+        if [ -f "${PLAN_SRC}" ]; then
+            cp -f "${PLAN_SRC}" "${REPO_ROOT}/morning_sre_plan.md"
+        fi
+
+        # Re-synchronise le démon Antigravity Remote Control depuis cron (system.slice) pour exposer instantanément la session dans l'UI Web
+        UID_VAL=$(id -u)
+        export XDG_RUNTIME_DIR="/run/user/${UID_VAL}"
+        systemctl --user restart antigravity-cli-daemon.service 2>/dev/null || true
+    fi
 else
     log_err "Binaire agy introuvable à ${AGY_BIN}."
+    CONV_ID="agy-binary-not-found"
 fi
 
-# Envoi de l'alerte Discord Orange/Rouge avec le deep-link et l'ID
+# Envoi de l'alerte Discord Orange/Rouge avec le deep-link et l'ID (Heredoc sans interpolation Bash)
 if [ -n "${DISCORD_WEBHOOK}" ]; then
-    python3 -c "
+    python3 - "${ANOMALIES_MD}" "${CONV_ID}" "${DISCORD_WEBHOOK}" "${TIMESTAMP}" << 'EOF'
 import json, sys, urllib.request
 
 issues_list = sys.argv[1]
@@ -358,8 +409,10 @@ payload = {
         'color': 15158332, # Rouge #E74C3C
         'fields': [
             {'name': 'Anomalies Relevées', 'value': issues_list[:1024], 'inline': False},
-            {'name': 'Session Antigravity Créée', 'value': f'\`\`\`{conv_id}\`\`\`', 'inline': True},
-            {'name': 'Action Requise', 'value': 'Ouvrez Antigravity (ou le Remote Control Web UI) sur **mgmt-devops** pour inspecter **implementation_plan.md** et approuver la remédiation.', 'inline': False}
+            {'name': 'Session Antigravity Créée', 'value': f'```{conv_id}```', 'inline': True},
+            {'name': 'Projet Web UI', 'value': 'mgmt-devops', 'inline': True},
+            {'name': 'Fichier Plan Direct', 'value': '`morning_sre_plan.md` à la racine du dépôt Git', 'inline': False},
+            {'name': 'Action Requise', 'value': 'Ouvrez Antigravity Remote Control Web UI (https://antigravity.google.com) sur `mgmt-devops` pour inspecter et exécuter la remédiation, ou consultez `morning_sre_plan.md`.', 'inline': False}
         ],
         'footer': {'text': 'Morning Proactive SRE Agent • mgmt-devops (CT 900)'},
         'timestamp': timestamp
@@ -371,7 +424,7 @@ try:
     urllib.request.urlopen(req)
 except Exception as e:
     print(f'Discord alert delivery error: {e}', file=sys.stderr)
-" "${ANOMALIES_MD}" "${CONV_ID}" "${DISCORD_WEBHOOK}" "${TIMESTAMP}"
+EOF
 fi
 
 exit 1

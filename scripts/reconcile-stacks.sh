@@ -149,7 +149,7 @@ resolve_stack_metadata() {
     # Check optional instance stack-map configuration
     local instance_map="${SCRIPT_DIR}/instance/stack-map.conf"
     if [ -f "${instance_map}" ]; then
-        # shellcheck disable=SC2317
+        # shellcheck disable=SC2317,SC2329
         register_instance_stack() {
             local map_app="$1"
             local map_ctid="$2"
@@ -281,13 +281,45 @@ reconcile_single_stack() {
         --exclude='*.pyc' \
         -cf - . | run_on_node "${node_ip}" "pct exec ${ctid} -- tar -C /opt/${app} -xf -"
 
+    # 5b. Pre-stack maintenance hook (e.g. player notifications & graceful RCON save/quit)
+    local pre_stack_hook="${REPO_ROOT}/scripts/instance/pre-stack-update-hook.sh"
+    if [ -x "${pre_stack_hook}" ]; then
+        local hook_rc=0
+        bash "${pre_stack_hook}" "${node_name}" "${node_ip}" "${ctid}" "${app}" "/opt/${app}" "${DRY_RUN}" "reconcile" || hook_rc=$?
+        if [ "${hook_rc}" -eq 42 ]; then
+            log "[*] Instance hook deferred reconciliation for ${app} (CT ${ctid}). Skipping."
+            return 0
+        fi
+    fi
+
     # 6. Converge container stack using docker compose up
-    log "[*] Applying declarative Compose state (docker compose up -d --remove-orphans --wait --wait-timeout 120)..."
+    log "[*] Applying declarative Compose state (docker compose up -d --remove-orphans)..."
     run_in_ct "${node_ip}" "${ctid}" "
         cd /opt/${app}
-        docker compose up -d --remove-orphans --wait --wait-timeout 120
+        docker compose build 2>/dev/null || true
+        STOPPED_MANAGED=\$(docker inspect --format '{{if and (ne .State.Status \"running\") (or (eq .HostConfig.RestartPolicy.Name \"no\") (eq (index .Config.Labels \"homelab.managed-lifecycle\") \"true\"))}}{{index .Config.Labels \"com.docker.compose.service\"}}{{end}}' \$(docker compose ps -a -q) 2>/dev/null | grep . || true)
+        SERVICES_TO_START=\"\"
+        for srv in \$(docker compose config --services 2>/dev/null || true); do
+            if echo \"\${STOPPED_MANAGED}\" | grep -qw \"\${srv}\"; then
+                continue
+            fi
+            SERVICES_TO_START=\"\${SERVICES_TO_START} \${srv}\"
+        done
+        SERVICES_TO_START=\$(echo \"\${SERVICES_TO_START}\" | xargs)
+        if [ -n \"\${SERVICES_TO_START}\" ]; then
+            docker compose up -d --remove-orphans \${SERVICES_TO_START}
+        else
+            docker compose up -d --remove-orphans --wait --wait-timeout 120
+        fi
+        # Refresh dependency links (e.g. network_mode: service:gluetun) for stopped scale-to-zero containers without starting them
+        docker compose up --no-start 2>/dev/null || true
         docker image prune -f >/dev/null 2>&1 || true
     "
+
+    local post_maint_hook="${REPO_ROOT}/scripts/instance/post-maintenance-hook.sh"
+    if [ -x "${post_maint_hook}" ]; then
+        bash "${post_maint_hook}" --mode reconcile --node "${node_name}" --app "${app}" --errors 0 || true
+    fi
 
     # 7. Verification check
     log "[+] Checking running services for ${app}:"

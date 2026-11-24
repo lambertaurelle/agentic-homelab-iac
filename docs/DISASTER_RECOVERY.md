@@ -30,7 +30,7 @@ flowchart TD
     InstallScripts --> VerifyB["Run scripts/scan-security.sh -> Full Cluster Operational"]
 
     ScenarioC --> DBRestore["PostgreSQL VectorChord & SQLite Recovery"]
-    ScenarioD --> RouterDNS["Override Router DHCP DNS to 9.9.9.9"]
+    ScenarioD --> RouterDNS["Override Router DHCP DNS to 1.1.1.1 / 8.8.8.8"]
 ```
 
 ---
@@ -39,15 +39,16 @@ flowchart TD
 
 The recovery procedures in this runbook leverage deterministic container allocations, automated VZDump snapshots to centralized backup storage (e.g. NFS/SMB/PBS storage pool), and declarative OpenTofu infrastructure.
 
-> 💡 **Instance-Specific Inventory & Storage Pools**: For personal node names, static IP assignments, and backup export paths, refer to the [Instance Documentation Overlay (`docs/instance/`)](instance/):
+> 💡 **Instance-Specific Inventory, Storage & Workload Restore**: For personal node names, static IP assignments, and step-by-step recovery procedures for every backed-up workload, refer to the [Instance Documentation Overlay (`docs/instance/`)](instance/):
 > - [Container Inventory & Deterministic Allocations](instance/INVENTORY.md)
 > - [Storage Mounts & VZDump Backup Schedules](instance/STORAGE_AND_BACKUPS.md)
+> - [Per-Workload Restore Runbook](instance/RESTORE_RUNBOOK.md) (if configured for your private instance)
 
 ---
 
 ## ⚡ Scenario A: Rapid Restore from Snapshots (< 5 Min)
 
-All containers are backed up daily with `zstd` compression to the configured backup storage pool (e.g. `syno-backup` or `local-backup` mounted at `/mnt/pve/<storage>/dump`).
+All active non-ephemeral containers are backed up daily via Proxmox `vzdump` (uncompressed `.tar` when paired with Restic CDC deduplication, or `zstd` for standalone pools) to the configured backup storage pool (e.g. `syno-backup` or `local-backup` mounted at `/mnt/pve/<storage>/dump`).
 
 ### 1. Discover Available Backups
 From Management Workspace (`mgmt-devops`, CT 900) or either Proxmox hypervisor node (`node-1` / `node-2`):
@@ -141,7 +142,7 @@ Use this scenario if both hypervisors suffer catastrophic drive failure or the e
    ```bash
    /root/homelab-iac/scripts/bootstrap-secrets.sh
    ```
-   *Generates `tofu/terraform.tfvars`, `stacks/monitoring/.env`, formats HCL code with `tofu fmt`, syncs Discord webhook secrets to GitHub via `gh secret set`, and automatically invokes instance hooks if present.*
+   *Generates `tofu/terraform.tfvars`, `stacks/monitoring/.env`, `stacks/offsite-backup/.env`, formats HCL code with `tofu fmt`, and automatically invokes instance hooks if present.*
 
 ### Step 3: Provision All Containers Declaratively with OpenTofu
 ```bash
@@ -168,9 +169,9 @@ tofu apply -auto-approve
    Ensure `/mnt/nas/data` and `/mnt/nas/photos` are mounted in `/etc/fstab`:
    ```bash
    # On Utility Node (node-1) & Compute Node (node-2):
-   mkdir -p /mnt/nas/data /mnt/nas/photos
-   echo "10.0.0.4:/volume2/data /mnt/nas/data nfs defaults,vers=4 0 0" >> /etc/fstab
-   echo "10.0.0.4:/volume2/photos /mnt/nas/photos nfs defaults,vers=4 0 0" >> /etc/fstab
+   mkdir -p /mnt/syno-data /mnt/syno-photos
+   echo "10.0.0.4:/volume2/data /mnt/syno-data nfs defaults,_netdev,nofail 0 0" >> /etc/fstab
+   echo "10.0.0.4:/volume2/photos /mnt/syno-photos nfs defaults,_netdev,nofail 0 0" >> /etc/fstab
    mount -a
    ```
 
@@ -343,14 +344,14 @@ If both hypervisors or both AdGuard Home instances (`10.0.0.201` and `10.0.0.202
 1. Access router web administration interface (`http://10.0.0.1`).
 2. Navigate to **DHCP / LAN Settings**.
 3. Update Primary and Secondary DNS servers from `10.0.0.201` / `10.0.0.202` to:
-   - Primary: `9.9.9.9` (Quad9) or `1.1.1.1` (Cloudflare)
-   - Secondary: `149.112.112.112` or `1.0.0.1`
+   - Primary: `1.1.1.1` (Cloudflare) or `9.9.9.9` (Quad9)
+   - Secondary: `8.8.8.8` (Google) or `1.0.0.1` (Cloudflare)
 4. Save and renew DHCP leases on connected client devices.
 
 ### Method 2: Client-Side Immediate Temporary Fix (Linux / macOS)
 ```bash
 # Linux / macOS manual resolv.conf override
-echo "nameserver 9.9.9.9" | sudo tee /etc/resolv.conf
+printf "nameserver 1.1.1.1\nnameserver 8.8.8.8\n" | sudo tee /etc/resolv.conf
 ```
 
 ### Method 3: Direct Proxmox Hypervisor Web UI Access
@@ -378,33 +379,40 @@ pct exec 602 -- restic snapshots
 *Output displays snapshot IDs, timestamps, tags (e.g. `vzdump-snapshots`, `immich-photos`), and source paths.*
 
 ### 2. Restore VZDump Archives from Cloud
-To restore container snapshot archives back to the local NAS storage pool:
+> ⚠️ **Read-Only Mount Guard**: `CT 602` mounts `/mnt/backup-source/*` as **read-only (`ro=1`)** to protect source data. Restore either onto a temporary read-write staging directory (e.g. `CT 602:/tmp/restore` or directly from the Proxmox hypervisor / external host with `rclone` + `restic`), then move/import archives into `/mnt/pve/syno-backup/dump/`.
 
 ```bash
-# 1. Restore the latest VZDump snapshot archive from cloud to the local dump directory
-pct exec 602 -- restic restore latest --tag vzdump-snapshots --target /mnt/backup-source/vzdump/
+# Option 1 (Recommended): Restore from Proxmox host / recovery machine to NAS staging path
+export RESTIC_REPOSITORY="rclone:offsite-remote:homelab-backups"
+export RESTIC_PASSWORD="<your_restic_password>"
 
-# 2. Restore containers using the standard restoration script
+restic restore latest --tag vzdump-snapshots --target /tmp/restic-restore/
+cp -a /tmp/restic-restore/mnt/backup-source/vzdump/dump/vzdump-lxc-* /mnt/pve/syno-backup/dump/
+
+# Restore containers using the standard restoration script
 /root/homelab-iac/scripts/restore-all-lxc.sh --all --yes
 ```
 
-### 3. Restore Specific Datasets or Photos
-To restore a specific folder (e.g. Immich photo library or Audiobooks):
+### 3. Restore Specific Datasets or Control Plane (`CT 900`)
+To restore a specific folder (e.g. photo library, audiobooks, or `CT 900` `mgmt-devops` containing `homelab-secrets.env` and `terraform.tfstate`):
 
 ```bash
-# Restore specific snapshot to NAS photos directory
-pct exec 602 -- restic restore <SNAPSHOT_ID> --target /mnt/backup-source/nas-photos/
+# Restore specific dataset snapshot from hypervisor or recovery machine
+restic restore <SNAPSHOT_ID> --target /tmp/restic-dataset-restore/
+
+# Or restore only CT 900 Control Plane VZDump archive:
+restic restore latest --tag vzdump-snapshots --include "/mnt/backup-source/vzdump/dump/vzdump-lxc-900-*" --target /tmp/restic-ct900/
 ```
 
 ### 4. Direct Cloud Recovery Without Proxmox (Bare Metal / External Machine)
 In a total loss scenario where the Proxmox cluster is gone, any standard computer with `rclone` and `restic` can recover the entire repository:
 
 ```bash
-# 1. Configure rclone for pCloud (or cloud provider)
+# 1. Configure rclone remote matching your provider (e.g. 'offsite-remote')
 rclone config
 
 # 2. Export encryption password and restore directly
-export RESTIC_REPOSITORY="rclone:pcloud:homelab-backups"
+export RESTIC_REPOSITORY="rclone:offsite-remote:homelab-backups"
 export RESTIC_PASSWORD="<your_restic_password>"
 
 restic restore latest --target /local/recovery/path
