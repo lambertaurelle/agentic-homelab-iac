@@ -96,7 +96,7 @@ adguard_primary_network_bridge = "vmbr0"
 adguard_primary_mac_address    = "bc:24:11:00:05:01"
 adguard_primary_ipv4_address   = "10.0.0.201/24"
 adguard_primary_ipv4_gateway   = "10.0.0.1"
-adguard_dns_servers            = ["10.0.0.101"]
+adguard_dns_servers            = ["1.1.1.1", "8.8.8.8"]
 
 # SSH keys to inject for root access
 adguard_primary_ssh_public_keys = [
@@ -105,8 +105,8 @@ adguard_primary_ssh_public_keys = [
   # "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACA... root@node-2"
 ]
 
-# LXC Privilege mode (false = privileged)
-adguard_primary_unprivileged = false
+# LXC Privilege mode (true = unprivileged)
+adguard_primary_unprivileged = true
 
 # ==============================================================================
 # AdGuard Home Secondary LXC Configuration (Node: node-2)
@@ -133,8 +133,8 @@ adguard_secondary_ssh_public_keys = [
   # "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACA... root@node-2"
 ]
 
-# LXC Privilege mode (false = privileged)
-adguard_secondary_unprivileged = false
+# LXC Privilege mode (true = unprivileged)
+adguard_secondary_unprivileged = true
 
 # ==============================================================================
 # Monitoring (Uptime Kuma) LXC Configuration (Node: node-1)

@@ -43,8 +43,8 @@ TEST_DOMAIN="google.com"
 # Configuration map
 NODE1_IP="${NODE1_IP:-10.0.0.10}"
 NODE2_IP="${NODE2_IP:-10.0.0.20}"
-PRIMARY_ADGUARD_IP="${PRIMARY_ADGUARD_IP:-10.0.0.201}"
-SECONDARY_ADGUARD_IP="${SECONDARY_ADGUARD_IP:-10.0.0.202}"
+PRIMARY_ADGUARD_IP="${ADGUARD_PRIMARY_IP:-${PRIMARY_ADGUARD_IP:-10.0.0.201}}"
+SECONDARY_ADGUARD_IP="${ADGUARD_SECONDARY_IP:-${SECONDARY_ADGUARD_IP:-10.0.0.202}}"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -83,13 +83,20 @@ done
 mkdir -p "$(dirname "${LOG_FILE}")"
 touch "${LOG_FILE}" 2>/dev/null || true
 
+STDOUT_IS_LOG=false
+if [ -e /proc/self/fd/1 ] && [ -e "${LOG_FILE}" ]; then
+    if [ "$(stat -Lc '%d:%i' /proc/self/fd/1 2>/dev/null || echo a)" = "$(stat -Lc '%d:%i' "${LOG_FILE}" 2>/dev/null || echo b)" ]; then
+        STDOUT_IS_LOG=true
+    fi
+fi
+
 # Logging helper
 log() {
     local timestamp
     timestamp=$(date '+%Y-%m-%d %H:%M:%S')
     local message="[$timestamp] $1"
     echo -e "$message"
-    if [ -w "${LOG_FILE}" ]; then
+    if [ "${STDOUT_IS_LOG}" != "true" ] && [ -w "${LOG_FILE}" ]; then
         echo -e "$message" >> "${LOG_FILE}"
     fi
 }
@@ -200,10 +207,12 @@ log "[*] Guard 2/3: Testing peer AdGuard DNS resolution (@${PEER_ADGUARD_IP} ${T
 DNS_RESOLVED=false
 
 if command -v dig >/dev/null 2>&1; then
-    DNS_OUTPUT=$(dig @"${PEER_ADGUARD_IP}" "${TEST_DOMAIN}" +time=3 +tries=2 +short 2>/dev/null || true)
-    if [ -n "${DNS_OUTPUT}" ]; then
-        DNS_RESOLVED=true
-        log "[+] DNS query resolved: $(echo "${DNS_OUTPUT}" | tr '\n' ' ')"
+    if DNS_RAW=$(dig @"${PEER_ADGUARD_IP}" "${TEST_DOMAIN}" +time=3 +tries=2 +short 2>/dev/null); then
+        DNS_OUTPUT=$(printf '%s\n' "${DNS_RAW}" | grep -v '^;' | grep -E '^[0-9A-Za-z.:-]+$' || true)
+        if [ -n "${DNS_OUTPUT}" ]; then
+            DNS_RESOLVED=true
+            log "[+] DNS query resolved: $(echo "${DNS_OUTPUT}" | tr '\n' ' ')"
+        fi
     fi
 elif command -v nslookup >/dev/null 2>&1; then
     if nslookup -timeout=3 "${TEST_DOMAIN}" "${PEER_ADGUARD_IP}" >/dev/null 2>&1; then
@@ -251,6 +260,14 @@ if [ "${DRY_RUN}" = true ]; then
     log "[DRY-RUN] Pre-flight checks successful. Reboot skipped because --dry-run was specified."
     log "=============================================================================="
     exit 0
+fi
+
+PRE_MAINT_HOOK="${REPO_ROOT}/scripts/instance/pre-maintenance-hook.sh"
+if [ -x "${PRE_MAINT_HOOK}" ]; then
+    log "[*] Invoking instance pre-maintenance hook before reboot (${PRE_MAINT_HOOK})..."
+    if ! bash "${PRE_MAINT_HOOK}" --mode reboot --node "${CURRENT_NODE}" --downtime-min "${REBOOT_ESTIMATED_MIN:-4}"; then
+        log "[!] Warning: pre-maintenance hook returned non-zero status; proceeding with reboot."
+    fi
 fi
 
 log "[*] Syncing filesystem buffers..."

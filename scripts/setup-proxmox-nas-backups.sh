@@ -9,9 +9,9 @@
 #   2. Backup retention policy: keep-daily=3, keep-weekly=2
 #   3. Dump directory permissions (/mnt/pve/syno-backup/dump)
 #   4. Multi-node storage activation across 'node-1' and 'node-2'
-#   5. Automated daily snapshot backups for all 13 active LXC containers:
-#      Includes: 101 102 201 301 501 502 510 511 520 701 702 801 900
-#      Explicitly excludes ephemeral CT 602 and stopped containers (401, 601, 901, 902)
+#   5. Automated daily snapshot backups for all active LXC containers:
+#      Includes: core active containers (configurable via BACKUP_CTS)
+#      Explicitly excludes ephemeral CT 602 and stopped/ephemeral containers (601, 901)
 #      Scheduled at 03:00 AM daily with uncompressed snapshot mode & failure alerts
 # ==============================================================================
 set -euo pipefail
@@ -32,12 +32,15 @@ NFS_EXPORT="${NFS_EXPORT:-/mnt/nas/data}"
 STORAGE_ID="syno-backup"
 STORAGE_PATH="/mnt/pve/syno-backup"
 PRUNE_RETENTION="keep-daily=3,keep-weekly=2"
-BACKUP_CTS="101 102 201 301 501 502 510 511 520 701 702 801 900"
+BACKUP_CTS="${BACKUP_CTS:-101 102 201 301 501 502 510 511 520 701 702 801 900}"
 # shellcheck disable=SC2034
 BACKUP_SCHEDULE_TIME="03:00"
 BACKUP_MODE="snapshot"
 BACKUP_COMPRESS="0"
 BACKUP_MAILNOTIFY="failure"
+VZDUMP_BWLIMIT_KBPS="${VZDUMP_BWLIMIT_KBPS:-40960}"
+VZDUMP_IONICE="${VZDUMP_IONICE:-7}"
+VZDUMP_HOOK_SCRIPT="/root/homelab-iac/scripts/vzdump-hook.sh"
 
 echo "=============================================================================="
 echo "    Proxmox VE Cluster NAS Backup & VZDump Automation Setup                  "
@@ -140,11 +143,51 @@ if [ "${NODE1_STATUS}" != "active" ] || [ "${NODE2_STATUS}" != "active" ]; then
 fi
 
 # ------------------------------------------------------------------------------
-# 4. Configure Automated VZDump Backup Schedule
+# 4. Configure VZDump Hook, Throttling (/etc/vzdump.conf) & Schedule
 # ------------------------------------------------------------------------------
-echo "[*] Step 4/4: Configuring automated daily VZDump cron schedule in /etc/pve/vzdump.cron..."
+echo "[*] Step 4/4: Configuring /etc/vzdump.conf (bwlimit=${VZDUMP_BWLIMIT_KBPS} KiB/s, ionice=${VZDUMP_IONICE}) and vzdump.cron..."
 
-# Format /etc/pve/vzdump.cron using cluster-wide --all 1
+sync_vzdump_conf() {
+    local runner="$1"
+    # Ensure hook script exists before referencing it in /etc/vzdump.conf (PVE dies if missing)
+    if [ -f "${SCRIPT_DIR}/vzdump-hook.sh" ]; then
+        if [ "${runner}" = "master" ]; then
+            run_on_master "mkdir -p /root/homelab-iac/scripts/instance"
+            if ip addr show 2>/dev/null | grep -q "${NODE1_IP}" || [[ "${NODE1_IP}" == "localhost" ]]; then
+                install -m 755 "${SCRIPT_DIR}/vzdump-hook.sh" "${VZDUMP_HOOK_SCRIPT}"
+            else
+                scp -o StrictHostKeyChecking=no "${SCRIPT_DIR}/vzdump-hook.sh" "root@${NODE1_IP}:${VZDUMP_HOOK_SCRIPT}"
+                run_on_master "chmod 755 ${VZDUMP_HOOK_SCRIPT}"
+            fi
+        else
+            run_on_secondary "mkdir -p /root/homelab-iac/scripts/instance"
+            if ip addr show 2>/dev/null | grep -q "${NODE2_IP}"; then
+                install -m 755 "${SCRIPT_DIR}/vzdump-hook.sh" "${VZDUMP_HOOK_SCRIPT}"
+            else
+                scp -o StrictHostKeyChecking=no "${SCRIPT_DIR}/vzdump-hook.sh" "root@${NODE2_IP}:${VZDUMP_HOOK_SCRIPT}"
+                run_on_secondary "chmod 755 ${VZDUMP_HOOK_SCRIPT}"
+            fi
+        fi
+    fi
+
+    local conf_cmd="cat << 'VZDCONF' > /etc/vzdump.conf
+# vzdump default settings (Managed by setup-proxmox-nas-backups.sh)
+bwlimit: ${VZDUMP_BWLIMIT_KBPS}
+ionice: ${VZDUMP_IONICE}
+script: ${VZDUMP_HOOK_SCRIPT}
+VZDCONF"
+    if [ "${runner}" = "master" ]; then
+        run_on_master "${conf_cmd}"
+    else
+        run_on_secondary "${conf_cmd}"
+    fi
+}
+
+sync_vzdump_conf "master"
+sync_vzdump_conf "secondary"
+echo "[+] /etc/vzdump.conf and hook script synchronized across node-1 and node-2."
+
+# Format /etc/pve/vzdump.cron
 run_on_master "cat << 'CRONEOF' > /etc/pve/vzdump.cron
 # cluster wide vzdump cron schedule
 # Automatically generated file - do not edit

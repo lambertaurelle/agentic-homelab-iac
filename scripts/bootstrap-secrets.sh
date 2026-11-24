@@ -109,13 +109,12 @@ with open(sys.argv[1], "r", encoding="utf-8", errors="replace") as f:
             print(line, end="")
 ' "${SECRETS_FILE}" > "${CLEAN_SECRETS_FILE}"
 
-cp "${CLEAN_SECRETS_FILE}" "${SECRETS_FILE}"
-chmod 600 "${SECRETS_FILE}"
+chmod 600 "${SECRETS_FILE}" 2>/dev/null || true
 
-echo "[*] Sourcing environment from ${SECRETS_FILE}..."
+echo "[*] Sourcing environment from normalized secrets..."
 set -a
 # shellcheck disable=SC1090
-. "${SECRETS_FILE}"
+. "${CLEAN_SECRETS_FILE}"
 set +a
 
 # ------------------------------------------------------------------------------
@@ -169,6 +168,8 @@ CLOUDFLARED_SECONDARY_HOSTNAME="${CLOUDFLARED_SECONDARY_HOSTNAME:-cloudflared-se
 ADGUARD_PRIMARY_HOSTNAME="${ADGUARD_PRIMARY_HOSTNAME:-adguard-primary}"
 ADGUARD_SECONDARY_HOSTNAME="${ADGUARD_SECONDARY_HOSTNAME:-adguard-secondary}"
 MONITORING_HOSTNAME="${MONITORING_HOSTNAME:-monitoring}"
+TAILSCALE_HOSTNAME="${TAILSCALE_HOSTNAME:-tailscale}"
+ENABLE_TAILSCALE="${ENABLE_TAILSCALE:-false}"
 
 # Build HCL-formatted SSH public keys array
 SSH_KEYS_HCL=$(cat <<SSH_KEYS_EOF
@@ -220,9 +221,9 @@ adguard_primary_network_bridge   = "vmbr0"
 adguard_primary_mac_address      = "bc:24:11:00:05:01"
 adguard_primary_ipv4_address     = "${ADGUARD_PRIMARY_IPV4}"
 adguard_primary_ipv4_gateway     = "${DEFAULT_GATEWAY_IP}"
-adguard_dns_servers              = ["${UPSTREAM_DNS_IP}"]
+adguard_dns_servers              = ["1.1.1.1", "8.8.8.8"]
 adguard_primary_ssh_public_keys  = ${SSH_KEYS_HCL}
-adguard_primary_unprivileged     = false
+adguard_primary_unprivileged     = ${ADGUARD_PRIMARY_UNPRIVILEGED:-true}
 
 # ==============================================================================
 # AdGuard Home Secondary (CT 502 on compute node)
@@ -240,7 +241,7 @@ adguard_secondary_mac_address      = "bc:24:11:00:05:02"
 adguard_secondary_ipv4_address     = "${ADGUARD_SECONDARY_IPV4}"
 adguard_secondary_ipv4_gateway     = "${DEFAULT_GATEWAY_IP}"
 adguard_secondary_ssh_public_keys  = ${SSH_KEYS_HCL}
-adguard_secondary_unprivileged     = false
+adguard_secondary_unprivileged     = ${ADGUARD_SECONDARY_UNPRIVILEGED:-true}
 
 # ==============================================================================
 # Cloudflared Primary (CT 510 on utility node)
@@ -311,6 +312,25 @@ offsite_backup_ssh_public_keys  = ${SSH_KEYS_HCL}
 offsite_backup_unprivileged     = false
 offsite_backup_started          = false
 offsite_backup_start_on_boot    = false
+
+# Shared Application Container Keys
+app_ssh_public_keys = ${SSH_KEYS_HCL}
+
+# ==============================================================================
+# Tailscale Subnet Router & SSH Bastion (CT 520 on utility node)
+# ==============================================================================
+enable_tailscale           = ${ENABLE_TAILSCALE}
+tailscale_ct_id            = 520
+tailscale_hostname         = "${TAILSCALE_HOSTNAME}"
+tailscale_cores            = 1
+tailscale_memory           = 512
+tailscale_swap             = 256
+tailscale_disk_storage     = "local-lvm"
+tailscale_disk_size        = 8
+tailscale_network_bridge   = "vmbr0"
+tailscale_mac_address      = "bc:24:11:00:05:20"
+tailscale_ipv4_address     = "dhcp"
+tailscale_ssh_public_keys  = ${SSH_KEYS_HCL}
 TFVARS_EOF
 
 chmod 600 "${TOFU_TFVARS}"
@@ -327,7 +347,7 @@ UPTIME_KUMA_ADMIN_HASH=${UPTIME_KUMA_ADMIN_HASH:-}
 UPTIME_KUMA_BASE_URL=${UPTIME_KUMA_BASE_URL:-}
 DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-${DISCORD_MONITORING_WEBHOOK_URL:-}}
 DISCORD_MONITORING_WEBHOOK_URL=${DISCORD_MONITORING_WEBHOOK_URL:-${DISCORD_WEBHOOK_URL:-}}
-DISCORD_SECURITY_WEBHOOK_URL=${DISCORD_SECURITY_WEBHOOK_URL:-}
+DISCORD_SECURITY_WEBHOOK_URL=${DISCORD_SECURITY_WEBHOOK_URL:-${DISCORD_MONITORING_WEBHOOK_URL:-${DISCORD_WEBHOOK_URL:-}}}
 MONITORING_EOF
 chmod 600 "${REPO_ROOT}/stacks/monitoring/.env"
 echo "[+] Sliced baseline .env for stacks/monitoring"
@@ -344,6 +364,7 @@ keys = [
     ('OFFSITE_BACKUP_REMOTE_TYPE', 'pcloud'),
     ('OFFSITE_BACKUP_REMOTE_PATH', 'homelab-backups'),
     ('RESTIC_PASSWORD', ''),
+    ('OFFSITE_BACKUP_UPLOAD_LIMIT_KB', '0'),
     ('OFFSITE_BACKUP_QUOTA_WARN_PERCENT', '85'),
     ('OFFSITE_BACKUP_QUOTA_CRIT_PERCENT', '95'),
     ('PCLOUD_REGION', 'eu'),

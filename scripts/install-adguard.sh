@@ -101,14 +101,16 @@ dns:
   ratelimit_whitelist: []
   refuse_any: true
   upstream_dns:
-    - https://dns10.quad9.net/dns-query
+    - https://cloudflare-dns.com/dns-query
+    - https://unfiltered.adguard-dns.com/dns-query
   upstream_dns_file: ""
   bootstrap_dns:
-    - 9.9.9.10
-    - 149.112.112.10
-    - 2620:fe::10
-    - 2620:fe::fe:10
-  fallback_dns: []
+    - 1.1.1.1
+    - 94.140.14.140
+    - 8.8.8.8
+  fallback_dns:
+    - https://1.1.1.1/dns-query
+    - https://8.8.8.8/dns-query
   upstream_mode: load_balance
   fastest_timeout: 1s
   allowed_clients: []
@@ -124,7 +126,7 @@ dns:
   cache_size: 4194304
   cache_ttl_min: 0
   cache_ttl_max: 0
-  cache_optimistic: false
+  cache_optimistic: true
   cache_optimistic_answer_ttl: 30s
   cache_optimistic_max_age: 12h
   bogus_nxdomain: []
@@ -202,7 +204,7 @@ dhcp:
     lease_duration: 86400
     icmp_timeout_msec: 1000
     options:
-      - "6 ip ${PRIMARY_IP}, ${SECONDARY_IP}"
+      - "6 ips ${PRIMARY_IP},${SECONDARY_IP}"
   dhcpv6:
     range_start: 2001::1
     lease_duration: 86400

@@ -3,11 +3,11 @@
 # Homelab Maintenance Automation & Cron Installation Setup
 # ==============================================================================
 # Installs and synchronizes:
-#   1. Daily staggered update cron jobs:
-#      - node-1: 04:30 AM daily (with flock mutex)
-#        30 4 * * * /usr/bin/flock -n /var/run/homelab-updates.lock /root/homelab-iac/scripts/update-cluster-stack.sh --node node-1 >> /var/log/homelab-updates.log 2>&1
-#      - node-2: 04:45 AM daily (with flock mutex)
-#        45 4 * * * /usr/bin/flock -n /var/run/homelab-updates.lock /root/homelab-iac/scripts/update-cluster-stack.sh --node node-2 >> /var/log/homelab-updates.log 2>&1
+#   1. Daily staggered update cron jobs (internal flock mutex inside script):
+#      - node-1: 04:30 AM daily
+#        30 4 * * * /root/homelab-iac/scripts/update-cluster-stack.sh --node node-1 >> /var/log/homelab-updates.log 2>&1
+#      - node-2: 04:45 AM daily
+#        45 4 * * * /root/homelab-iac/scripts/update-cluster-stack.sh --node node-2 >> /var/log/homelab-updates.log 2>&1
 #
 #   2. Daily security audit cron job (05:45 AM daily) on node-1:
 #      45 5 * * * if pct status 900 2>/dev/null | grep -q 'running'; then pct exec 900 -- /root/homelab-iac/scripts/scan-security.sh --discord --report; else /root/homelab-iac/scripts/scan-security.sh --discord --report; fi >> /var/log/homelab-security-audit.log 2>&1
@@ -147,7 +147,7 @@ EXISTING_CRON=$(crontab -l 2>/dev/null | grep -v 'update-cluster-stack\.sh' | gr
 cat <<EOF | crontab -
 ${EXISTING_CRON}
 # Homelab Maintenance Automation (Node: node-1)
-30 4 * * * /usr/bin/flock -n /var/run/homelab-updates.lock /root/homelab-iac/scripts/update-cluster-stack.sh --node node-1 >> /var/log/homelab-updates.log 2>&1
+30 4 * * * /root/homelab-iac/scripts/update-cluster-stack.sh --node node-1 >> /var/log/homelab-updates.log 2>&1
 15 5 * * 0 /root/homelab-iac/scripts/scheduled-reboot.sh >> /var/log/homelab-reboot.log 2>&1
 45 5 * * * if pct status 900 2>/dev/null | grep -q 'running'; then pct exec 900 -- /root/homelab-iac/scripts/scan-security.sh --discord --report; else /root/homelab-iac/scripts/scan-security.sh --discord --report; fi >> /var/log/homelab-security-audit.log 2>&1
 EOF
@@ -164,21 +164,23 @@ EXISTING_CRON=$(crontab -l 2>/dev/null | grep -v 'update-cluster-stack\.sh' | gr
 cat <<EOF | crontab -
 ${EXISTING_CRON}
 # Homelab Maintenance Automation (Node: node-2)
-45 4 * * * /usr/bin/flock -n /var/run/homelab-updates.lock /root/homelab-iac/scripts/update-cluster-stack.sh --node node-2 >> /var/log/homelab-updates.log 2>&1
+45 4 * * * /root/homelab-iac/scripts/update-cluster-stack.sh --node node-2 >> /var/log/homelab-updates.log 2>&1
 15 5 * * 1 /root/homelab-iac/scripts/scheduled-reboot.sh >> /var/log/homelab-reboot.log 2>&1
 EOF
 CRON_NODE2_EOF
 echo "[+] Crontab installed on node-2 (${NODE2_IP})."
 
-# Local Crontab Configuration for CT 900 (Morning SRE Proactive Agent at 06:00 AM)
+# Local Crontab Configuration for CT 900 (Morning SRE at 06:00 AM + Doc-vs-Live Audit at 06:20 AM)
 if command -v crontab >/dev/null 2>&1 && [ -f "${SCRIPT_DIR}/daily-sre-check.sh" ]; then
-    EXISTING_CT_CRON=$(crontab -l 2>/dev/null | grep -v 'daily-sre-check\.sh' || true)
+    EXISTING_CT_CRON=$(crontab -l 2>/dev/null | grep -v 'daily-sre-check\.sh' | grep -v 'audit-doc-vs-live\.sh' | grep -v '# Homelab Daily' || true)
     cat <<EOF | crontab -
 ${EXISTING_CT_CRON}
 # Homelab Daily SRE Proactive Health Check (06:00 AM)
 0 6 * * * /root/homelab-iac/scripts/daily-sre-check.sh >> /var/log/daily-sre-check.log 2>&1
+# Homelab Daily Documentation vs Live Stack & Restore Auditor (06:20 AM)
+20 6 * * * /root/homelab-iac/scripts/audit-doc-vs-live.sh >> /var/log/doc-vs-live-audit.log 2>&1
 EOF
-    echo "[+] Morning SRE check cron (06:00 AM) configured in local crontab."
+    echo "[+] Morning SRE check (06:00) and Doc-vs-Live audit (06:20) crons configured in local crontab."
 fi
 
 # ------------------------------------------------------------------------------

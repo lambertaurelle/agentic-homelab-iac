@@ -36,8 +36,8 @@ The homelab runs a hybrid multi-node Proxmox VE topology comprising the **Utilit
 
 | CT ID | Host Node | Service / Workload | Privilege Mode | Architecture & Hardware Rationale |
 | :--- | :--- | :--- | :--- | :--- |
-| **CT 501** | Utility Node (`node-1`) | `adguard` (Primary) | Privileged (`unprivileged = false`) | Raw socket and low-port binding for DNS (port 53) and DHCP server (port 67). |
-| **CT 502** | Compute Node (`node-2`) | `adguard` (Secondary) | Privileged (`unprivileged = false`) | Raw socket and low-port binding for HA secondary DNS (port 53) and DHCP server (port 67). |
+| **CT 501** | Utility Node (`node-1`) | `adguard` (Primary) | Unprivileged (`unprivileged = true`) | Isolated unprivileged LXC with network capability for DNS (port 53) and DHCP server (port 67). |
+| **CT 502** | Compute Node (`node-2`) | `adguard` (Secondary) | Unprivileged (`unprivileged = true`) | Isolated unprivileged LXC for HA secondary DNS (port 53). |
 | **CT 510** | Utility Node (`node-1`) | `cloudflared` (Primary) | Unprivileged (`unprivileged = true`) | Outbound-only active Cloudflare Zero Trust Tunnel connector. |
 | **CT 511** | Compute Node (`node-2`) | `cloudflared` (Secondary) | Unprivileged (`unprivileged = true`) | Outbound-only standby HA Cloudflare Zero Trust Tunnel connector. |
 | **CT 520** | Utility Node (`node-1`) | `tailscale` | Unprivileged (`unprivileged = true`) | Mesh VPN subnet router & SSH bastion with scoped `/dev/net/tun` character device passthrough (`c 10:200 rwm`). |

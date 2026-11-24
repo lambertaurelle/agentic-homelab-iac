@@ -46,7 +46,18 @@ else
     echo "[+] Container CT ${CTID} detected."
 fi
 
-# 2. Configure Host Crontab on node-1
+# 2. Sync host orchestrator script & configure Host Crontab on node-1
+HOST_RUNNER="/root/homelab-iac/scripts/run-offsite-backup-host.sh"
+if [ -f "${SCRIPT_DIR}/run-offsite-backup-host.sh" ]; then
+    run_on_master "mkdir -p /root/homelab-iac/scripts/instance"
+    if ip addr show 2>/dev/null | grep -q "${NODE1_IP}" || [[ "${NODE1_IP}" == "localhost" ]] || [[ "${NODE1_IP}" == "127.0.0.1" ]]; then
+        install -m 755 "${SCRIPT_DIR}/run-offsite-backup-host.sh" "${HOST_RUNNER}"
+    else
+        scp -o StrictHostKeyChecking=no "${SCRIPT_DIR}/run-offsite-backup-host.sh" "root@${NODE1_IP}:${HOST_RUNNER}"
+        run_on_master "chmod 755 ${HOST_RUNNER}"
+    fi
+fi
+
 echo "[*] Installing cron trigger in /etc/cron.d/homelab-offsite-backup on ${NODE1_IP}..."
 run_on_master "cat << 'CRONEOF' > /etc/cron.d/homelab-offsite-backup
 # /etc/cron.d/homelab-offsite-backup
@@ -54,7 +65,7 @@ run_on_master "cat << 'CRONEOF' > /etc/cron.d/homelab-offsite-backup
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
-${SCHEDULE_TIME} root while pgrep -x vzdump >/dev/null || ssh -o StrictHostKeyChecking=no -o ConnectTimeout=2 \"root@${NODE2_IP}\" \"pgrep -x vzdump >/dev/null\" 2>/dev/null; do sleep 30; done; if pct status ${CTID} 2>/dev/null | grep -q 'running'; then pct exec ${CTID} -- systemctl start offsite-backup.service; elif pct status ${CTID} >/dev/null 2>&1; then pct start ${CTID}; fi >/var/log/homelab-offsite-backup.log 2>&1
+${SCHEDULE_TIME} root ${HOST_RUNNER} >> /var/log/homelab-offsite-backup.log 2>&1
 CRONEOF
 chmod 644 /etc/cron.d/homelab-offsite-backup"
 

@@ -72,10 +72,10 @@ print(json.dumps(data))
     # Handle ephemeral auto-poweroff
     if [ "${EPHEMERAL_MODE}" = true ]; then
         echo "[*] Ephemeral mode: shutting down container..."
-        poweroff 2>/dev/null || shutdown -h now 2>/dev/null || true
+        systemctl poweroff 2>/dev/null || poweroff 2>/dev/null || /sbin/poweroff 2>/dev/null || shutdown -h now 2>/dev/null || true
     fi
 }
-trap cleanup_and_exit EXIT
+trap cleanup_and_exit EXIT INT TERM
 
 # ------------------------------------------------------------------------------
 # 1. Environment & Credentials Resolution
@@ -107,6 +107,7 @@ OFFSITE_BACKUP_REMOTE_NAME="${OFFSITE_BACKUP_REMOTE_NAME:-offsite-remote}"
 OFFSITE_BACKUP_REMOTE_TYPE="${OFFSITE_BACKUP_REMOTE_TYPE:-pcloud}"
 OFFSITE_BACKUP_REMOTE_PATH="${OFFSITE_BACKUP_REMOTE_PATH:-homelab-backups}"
 RESTIC_PASSWORD="${RESTIC_PASSWORD:-}"
+OFFSITE_BACKUP_UPLOAD_LIMIT_KB="${OFFSITE_BACKUP_UPLOAD_LIMIT_KB:-0}"
 WARN_THRESHOLD="${OFFSITE_BACKUP_QUOTA_WARN_PERCENT:-85}"
 CRIT_THRESHOLD="${OFFSITE_BACKUP_QUOTA_CRIT_PERCENT:-95}"
 DISCORD_WEBHOOK="${DISCORD_MONITORING_WEBHOOK_URL:-${DISCORD_WEBHOOK_URL:-}}"
@@ -116,9 +117,11 @@ if [ ! -f "${RCLONE_CONF}" ] && [ -f "${HOME}/.config/rclone/rclone.conf" ]; the
     RCLONE_CONF="${HOME}/.config/rclone/rclone.conf"
 fi
 
-# Find targets configuration
+# Find targets configuration (prefer read-only host-synced mount when present)
 TARGETS_FILE="/etc/offsite-backup/backup-targets.yaml"
-if [ ! -f "${TARGETS_FILE}" ] && [ -f "${REPO_ROOT}/config/instance/backup-targets.yaml" ]; then
+if [ -f "/mnt/offsite-sync/backup-targets.yaml" ]; then
+    TARGETS_FILE="/mnt/offsite-sync/backup-targets.yaml"
+elif [ ! -f "${TARGETS_FILE}" ] && [ -f "${REPO_ROOT}/config/instance/backup-targets.yaml" ]; then
     TARGETS_FILE="${REPO_ROOT}/config/instance/backup-targets.yaml"
 elif [ ! -f "${TARGETS_FILE}" ] && [ -f "${REPO_ROOT}/config/backup-targets.example.yaml" ]; then
     TARGETS_FILE="${REPO_ROOT}/config/backup-targets.example.yaml"
@@ -173,16 +176,45 @@ print(json.dumps(data))
 # ------------------------------------------------------------------------------
 if [ "${DRY_RUN}" = false ]; then
     echo "[*] Verifying Restic repository connectivity..."
-    if ! restic snapshots >/dev/null 2>&1; then
-        echo "[*] Repository not detected at ${RESTIC_REPOSITORY}. Initializing new encrypted repository..."
-        restic init || {
-            echo "[-] Error: Failed to initialize repository at ${RESTIC_REPOSITORY}" >&2
-            send_discord_embed "15158332" "❌ Offsite Backup Failed to Initialize" "Restic repository at **${RESTIC_REPOSITORY}** could not be contacted or initialized." "[]"
-            exit 1
-        }
-        echo "[+] Encrypted Restic repository initialized successfully."
-    else
+    REPO_CHECK_SUCCESS=false
+    RESTIC_CHECK_OUTPUT=""
+    MAX_RETRIES=5
+    RETRY_DELAY=5
+
+    for attempt in $(seq 1 "${MAX_RETRIES}"); do
+        if RESTIC_CHECK_OUTPUT=$(restic snapshots --compact 2>&1); then
+            REPO_CHECK_SUCCESS=true
+            break
+        fi
+
+        # Check if failure is due to a stale lock
+        if echo "${RESTIC_CHECK_OUTPUT}" | grep -qi -E 'unable to create lock|repository is already locked'; then
+            echo "[*] Repository lock detected on attempt ${attempt}/${MAX_RETRIES}. Attempting unlock..."
+            restic unlock >/dev/null 2>&1 || true
+        else
+            echo "[*] Connectivity check attempt ${attempt}/${MAX_RETRIES} failed. Retrying in ${RETRY_DELAY}s..."
+        fi
+        sleep "${RETRY_DELAY}"
+    done
+
+    if [ "${REPO_CHECK_SUCCESS}" = true ]; then
         echo "[+] Repository verified and reachable."
+    else
+        # Only attempt init if restic explicitly reports that the configuration/repo does not exist
+        if echo "${RESTIC_CHECK_OUTPUT}" | grep -qi -E 'Is there a repository at the following location|config file does not exist'; then
+            echo "[*] Repository not detected at ${RESTIC_REPOSITORY}. Initializing new encrypted repository..."
+            restic init || {
+                echo "[-] Error: Failed to initialize repository at ${RESTIC_REPOSITORY}" >&2
+                send_discord_embed "15158332" "❌ Offsite Backup Failed to Initialize" "Restic repository at **${RESTIC_REPOSITORY}** could not be contacted or initialized." "[]"
+                exit 1
+            }
+            echo "[+] Encrypted Restic repository initialized successfully."
+        else
+            echo "[-] Error: Repository unreachable or corrupted at ${RESTIC_REPOSITORY}:" >&2
+            echo "${RESTIC_CHECK_OUTPUT}" >&2
+            send_discord_embed "15158332" "❌ Offsite Backup Connectivity Failure" "Failed to reach Restic repository at **${RESTIC_REPOSITORY}** after ${MAX_RETRIES} attempts:\n\`\`\`\n$(echo "${RESTIC_CHECK_OUTPUT}" | tail -n 10)\n\`\`\`" "[]"
+            exit 1
+        fi
     fi
 fi
 
@@ -221,8 +253,8 @@ while IFS='|' read -r t_name t_src t_excludes; do
     if [ ! -e "${t_src}" ]; then
         echo "[-] ERROR: Target path does not exist: ${t_src}." >&2
         FAIL_COUNT=$((FAIL_COUNT + 1))
-        TARGETS_SUMMARY="${TARGETS_SUMMARY}\n• ❌ **${t_name}**: Path not found (${t_src})"
-        TARGETS_ERRORS="${TARGETS_ERRORS}\n**${t_name}**: Source directory \`${t_src}\` does not exist (NFS storage unmounted or offline)."
+        TARGETS_SUMMARY+=$'\n'"• ❌ **${t_name}**: Path not found (${t_src})"
+        TARGETS_ERRORS+=$'\n'"**${t_name}**: Source directory \`${t_src}\` does not exist (NFS storage unmounted or offline)."
         continue
     fi
 
@@ -230,8 +262,8 @@ while IFS='|' read -r t_name t_src t_excludes; do
     if [ -d "${t_src}" ] && [ -z "$(ls -A "${t_src}" 2>/dev/null)" ]; then
         echo "[-] ERROR: Target directory is completely empty: ${t_src}." >&2
         FAIL_COUNT=$((FAIL_COUNT + 1))
-        TARGETS_SUMMARY="${TARGETS_SUMMARY}\n• ❌ **${t_name}**: Directory empty (${t_src})"
-        TARGETS_ERRORS="${TARGETS_ERRORS}\n**${t_name}**: Directory \`${t_src}\` is empty. NFS share likely dropped before backup."
+        TARGETS_SUMMARY+=$'\n'"• ❌ **${t_name}**: Directory empty (${t_src})"
+        TARGETS_ERRORS+=$'\n'"**${t_name}**: Directory \`${t_src}\` is empty. NFS share likely dropped before backup."
         continue
     fi
 
@@ -247,24 +279,35 @@ while IFS='|' read -r t_name t_src t_excludes; do
     if [ "${DRY_RUN}" = true ]; then
         echo "[DRY-RUN] Would backup ${t_src} with tag '${t_name}'"
         SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
-        TARGETS_SUMMARY="${TARGETS_SUMMARY}\n• 🔍 **${t_name}**: Simulated backup"
+        TARGETS_SUMMARY+=$'\n'"• 🔍 **${t_name}**: Simulated backup"
     else
         echo "[*] Executing in-memory differential streaming backup..."
         RESTIC_OUTPUT=$(mktemp)
-        if restic backup --tag "${t_name}" "${EXCLUDE_ARGS[@]}" "${t_src}" > "${RESTIC_OUTPUT}" 2>&1; then
+        LIMIT_ARGS=()
+        if [ -n "${OFFSITE_BACKUP_UPLOAD_LIMIT_KB}" ] && [ "${OFFSITE_BACKUP_UPLOAD_LIMIT_KB}" -gt 0 ] 2>/dev/null; then
+            LIMIT_ARGS=("--limit-upload" "${OFFSITE_BACKUP_UPLOAD_LIMIT_KB}")
+            echo "[*] Applying upload bandwidth limit: ${OFFSITE_BACKUP_UPLOAD_LIMIT_KB} KiB/s"
+        fi
+        IO_PREFIX=()
+        if command -v ionice >/dev/null 2>&1; then
+            IO_PREFIX=("ionice" "-c" "2" "-n" "7" "nice" "-n" "10")
+        elif command -v nice >/dev/null 2>&1; then
+            IO_PREFIX=("nice" "-n" "10")
+        fi
+        if "${IO_PREFIX[@]}" restic backup --tag "${t_name}" "${LIMIT_ARGS[@]}" "${EXCLUDE_ARGS[@]}" "${t_src}" > "${RESTIC_OUTPUT}" 2>&1; then
             SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
             # Extract summary from restic output
             ADDED_BYTES=$(grep -E 'Added to the repository:' "${RESTIC_OUTPUT}" | tail -n 1 | awk '{print $5, $6}' || echo "N/A")
             FILES_PROCESSED=$(grep -E 'Files:' "${RESTIC_OUTPUT}" | tail -n 1 | awk '{print $2}' || echo "N/A")
-            TARGETS_SUMMARY="${TARGETS_SUMMARY}\n• ✅ **${t_name}**: ${FILES_PROCESSED} files (new data: ${ADDED_BYTES})"
+            TARGETS_SUMMARY+=$'\n'"• ✅ **${t_name}**: ${FILES_PROCESSED} new files (new data: ${ADDED_BYTES})"
             echo "[+] Target '${t_name}' backed up successfully."
         else
             FAIL_COUNT=$((FAIL_COUNT + 1))
-            TARGETS_SUMMARY="${TARGETS_SUMMARY}\n• ❌ **${t_name}**: Backup failed"
+            TARGETS_SUMMARY+=$'\n'"• ❌ **${t_name}**: Backup failed"
             echo "[-] Error backing up target '${t_name}':" >&2
             ERR_SNIPPET=$(tail -n 15 "${RESTIC_OUTPUT}" | grep -v -E '^[[:space:]]*$' | head -n 8 || true)
             echo "${ERR_SNIPPET}" >&2
-            TARGETS_ERRORS="${TARGETS_ERRORS}\n**${t_name}**:\n\`\`\`\n${ERR_SNIPPET}\n\`\`\`"
+            TARGETS_ERRORS+=$'\n'"**${t_name}**:"$'\n''```'$'\n'"${ERR_SNIPPET}"$'\n''```'
         fi
         rm -f "${RESTIC_OUTPUT}"
     fi
