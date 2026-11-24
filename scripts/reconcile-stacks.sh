@@ -149,7 +149,7 @@ resolve_stack_metadata() {
     # Check optional instance stack-map configuration
     local instance_map="${SCRIPT_DIR}/instance/stack-map.conf"
     if [ -f "${instance_map}" ]; then
-        # shellcheck disable=SC2317
+        # shellcheck disable=SC2317,SC2329
         register_instance_stack() {
             local map_app="$1"
             local map_ctid="$2"

@@ -35,7 +35,7 @@ PRE_HOOK="${SCRIPT_DIR}/instance/pre-offsite-backup-hook.sh"
 POST_HOOK="${SCRIPT_DIR}/instance/post-offsite-backup-hook.sh"
 PRE_HOOK_RAN=false
 
-# shellcheck disable=SC2317
+# shellcheck disable=SC2317,SC2329
 cleanup_post_hook() {
     if [ "${PRE_HOOK_RAN}" = true ] && [ -x "${POST_HOOK}" ]; then
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] [*] Invoking post-offsite-backup hook..."

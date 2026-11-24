@@ -33,7 +33,7 @@ flowchart TD
 
 The `homelab-iac` GitHub Actions workflow runs entirely on cloud runners (`ubuntu-latest`) to validate code quality and security before any infrastructure changes are applied locally:
 
-- **Shell script linting**: Enforces POSIX and bash best practices with `shellcheck`.
+- **Shell script linting**: Enforces POSIX and bash best practices with `shellcheck` (Ubuntu 26.04 / ShellCheck 0.11+ compatible).
 - **OpenTofu syntax & schema**: Verifies HCL code formatting (`tofu fmt -check`) and provider definitions (`tofu validate`).
 - **Secret leak detection**: Scans commit history with `gitleaks` to guarantee 0 credentials or PII leak into GitHub.
 - **Agent skill validation**: Ensures all `.agents/skills/` comply with the agentskills.io specification using `meta-skills`.
